@@ -1,0 +1,9 @@
+/target
+**/*.png
+**/*.ppm
+Cargo.lock
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
