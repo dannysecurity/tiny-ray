@@ -1,6 +1,7 @@
 mod bvh;
 mod camera;
 mod hittable;
+mod lights;
 mod material;
 mod ray;
 mod renderer;

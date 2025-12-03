@@ -6,7 +6,7 @@ A minimal path tracer written from scratch in Rust. Renders scenes of spheres wi
 
 - **Primitives** — analytic sphere intersection
 - **Materials** — Lambertian diffuse, fuzzy metal, dielectric (glass), and emissive light sources
-- **Lighting** — emissive spheres act as area lights; sky gradient for ambient fill
+- **Lighting** — emissive spheres act as area lights with next-event estimation (direct light sampling and shadow rays); sky gradient for ambient fill
 - **Acceleration** — SAH-style axis split BVH built over scene objects
 - **Scene files** — declarative [RON](https://github.com/ron-rs/ron) scene descriptions
 
@@ -70,6 +70,7 @@ src/
   bvh.rs        — bounding volume hierarchy
   camera.rs     — thin-lens perspective camera
   scene.rs      — RON loader and default demo
+  lights.rs     — emissive sphere lights and direct sampling
   renderer.rs   — Monte Carlo path tracing loop
 scenes/         — example scene files
 ```

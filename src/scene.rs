@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 use crate::bvh::BvhNode;
 use crate::hittable::Hittable;
+use crate::lights::LightList;
 use crate::material::Material;
 use crate::sphere::Sphere;
 use crate::vec3::{Color, Point3};
@@ -74,22 +75,28 @@ pub struct Scene {
     pub camera: CameraDesc,
     pub render: RenderDesc,
     pub world: Arc<dyn Hittable>,
+    pub lights: LightList,
 }
 
 impl Scene {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let text = fs::read_to_string(path)?;
         let file: SceneFile = ron::from_str(&text)?;
-        let mut objects: Vec<Arc<dyn Hittable>> = file
+        let mut spheres: Vec<Sphere> = file
             .objects
             .into_iter()
             .map(|s| {
-                Arc::new(Sphere::new(
+                Sphere::new(
                     Point3::new(s.center[0], s.center[1], s.center[2]),
                     s.radius,
                     s.material.into_material(),
-                )) as Arc<dyn Hittable>
+                )
             })
+            .collect();
+        let lights = LightList::from_spheres(&spheres);
+        let mut objects: Vec<Arc<dyn Hittable>> = spheres
+            .drain(..)
+            .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
             .collect();
 
         let world: Arc<dyn Hittable> = if objects.len() > 4 {
@@ -104,56 +111,61 @@ impl Scene {
             camera: file.camera,
             render: file.render,
             world,
+            lights,
         })
     }
 
     pub fn default_demo() -> Self {
-        let mut objects: Vec<Arc<dyn Hittable>> = vec![
-            Arc::new(Sphere::new(
+        let spheres = vec![
+            Sphere::new(
                 Point3::new(0.0, 1.0, 0.0),
                 1.0,
                 Arc::new(Material::Lambertian {
                     albedo: Color::new(0.8, 0.2, 0.2),
                 }),
-            )),
-            Arc::new(Sphere::new(
+            ),
+            Sphere::new(
                 Point3::new(-4.0, 1.0, 0.0),
                 1.0,
                 Arc::new(Material::Lambertian {
                     albedo: Color::new(0.2, 0.8, 0.2),
                 }),
-            )),
-            Arc::new(Sphere::new(
+            ),
+            Sphere::new(
                 Point3::new(4.0, 1.0, 0.0),
                 1.0,
                 Arc::new(Material::Metal {
                     albedo: Color::new(0.8, 0.8, 0.9),
                     fuzz: 0.05,
                 }),
-            )),
-            Arc::new(Sphere::new(
+            ),
+            Sphere::new(
                 Point3::new(0.0, 1.0, -4.0),
                 1.0,
                 Arc::new(Material::Dielectric { index: 1.5 }),
-            )),
-            Arc::new(Sphere::new(
+            ),
+            Sphere::new(
                 Point3::new(0.0, -1000.0, 0.0),
                 1000.0,
                 Arc::new(Material::Lambertian {
                     albedo: Color::new(0.5, 0.5, 0.5),
                 }),
-            )),
-            Arc::new(Sphere::new(
+            ),
+            Sphere::new(
                 Point3::new(0.0, 8.0, 0.0),
                 3.0,
                 Arc::new(Material::Emissive {
                     color: Color::new(1.0, 0.95, 0.8),
                     intensity: 4.0,
                 }),
-            )),
+            ),
         ];
-
-        let world = Arc::new(BvhNode::build(std::mem::take(&mut objects)));
+        let lights = LightList::from_spheres(&spheres);
+        let objects: Vec<Arc<dyn Hittable>> = spheres
+            .into_iter()
+            .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
+            .collect();
+        let world = Arc::new(BvhNode::build(objects));
         Self {
             camera: CameraDesc {
                 lookfrom: [13.0, 2.0, 3.0],
@@ -171,6 +183,7 @@ impl Scene {
                 output: "output.png".into(),
             },
             world,
+            lights,
         }
     }
 }

@@ -4,6 +4,8 @@ use rand::{Rng, SeedableRng};
 
 use crate::camera::Camera;
 use crate::hittable::Hittable;
+use crate::lights::LightList;
+use crate::material::Material;
 use crate::ray::Ray;
 use crate::scene::Scene;
 use crate::vec3::{Color, Vec3};
@@ -44,7 +46,13 @@ pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
                     / (scene.render.height - 1) as f64;
                 let time = rng.gen();
                 let ray = camera.get_ray(&mut rng, u, v, time);
-                pixel += ray_color(&mut rng, &ray, scene.world.as_ref(), scene.render.max_depth);
+                pixel += ray_color(
+                    &mut rng,
+                    &ray,
+                    scene.world.as_ref(),
+                    &scene.lights,
+                    scene.render.max_depth,
+                );
             }
             pixel /= scene.render.samples_per_pixel as f64;
             buffer.put_pixel(x, y, to_rgb(pixel));
@@ -60,6 +68,7 @@ fn ray_color<R: Rng + ?Sized>(
     rng: &mut R,
     ray: &Ray,
     world: &dyn Hittable,
+    lights: &LightList,
     depth: u32,
 ) -> Color {
     if depth == 0 {
@@ -67,12 +76,33 @@ fn ray_color<R: Rng + ?Sized>(
     }
 
     if let Some(hit) = world.hit(ray, 1e-3, f64::INFINITY) {
-        let emitted = hit.material.emitted();
-        if let Some((attenuation, scattered)) = hit.material.scatter(rng, ray, &hit) {
-            emitted + attenuation * ray_color(rng, &scattered, world, depth - 1)
-        } else {
-            emitted
+        let mut color = Color::default();
+
+        if let Material::Lambertian { albedo } = hit.material.as_ref() {
+            color += lights.sample_direct(
+                rng,
+                world,
+                hit.point,
+                hit.normal,
+                *albedo,
+                ray.time,
+            );
         }
+
+        let emitted = if hit.material.is_emissive() {
+            hit.material.emitted()
+        } else {
+            Color::default()
+        };
+
+        if let Some((attenuation, scattered)) = hit.material.scatter(rng, ray, &hit) {
+            color += attenuation
+                * ray_color(rng, &scattered, world, lights, depth - 1);
+        } else {
+            color += emitted;
+        }
+
+        color
     } else {
         let unit = ray.direction.normalize();
         let t = 0.5 * (unit.y + 1.0);
