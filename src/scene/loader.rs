@@ -176,4 +176,13 @@ objects:
         assert_eq!(yaml.objects.len(), ron.objects.len());
         assert_eq!(yaml.render.output, ron.render.output);
     }
+
+    #[test]
+    fn studio_json_on_disk_matches_ron_object_count() {
+        let json = load_scene_file("scenes/studio.json").unwrap();
+        let ron = load_scene_file("scenes/studio.ron").unwrap();
+        assert_eq!(json.objects.len(), ron.objects.len());
+        assert_eq!(json.render.output, ron.render.output);
+        assert_eq!(json.camera.lookfrom, ron.camera.lookfrom);
+    }
 }

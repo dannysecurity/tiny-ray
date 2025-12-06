@@ -153,4 +153,24 @@ mod tests {
         assert_eq!(json.lights.len(), ron.lights.len());
         assert_eq!(yaml.lights.len(), ron.lights.len());
     }
+
+    #[test]
+    fn studio_scene_loads_emissive_light_and_bvh() {
+        let scene = Scene::from_file("scenes/studio.ron").unwrap();
+        assert_eq!(scene.lights.len(), 1);
+        assert_eq!(scene.render.output, "studio.png");
+        assert_eq!(scene.render.samples_per_pixel, 100);
+    }
+
+    #[test]
+    fn studio_formats_match_object_count() {
+        use super::load_scene_file;
+
+        let ron = load_scene_file("scenes/studio.ron").unwrap();
+        let json = load_scene_file("scenes/studio.json").unwrap();
+        let yaml = load_scene_file("scenes/studio.yaml").unwrap();
+        assert_eq!(json.objects.len(), ron.objects.len());
+        assert_eq!(yaml.objects.len(), ron.objects.len());
+        assert_eq!(ron.objects.len(), 8);
+    }
 }
