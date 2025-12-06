@@ -1,8 +1,11 @@
-use std::fs;
+mod format;
+mod loader;
+
+pub use format::{CameraDesc, RenderDesc, SceneFile};
+pub use loader::load_scene_file;
+
 use std::path::Path;
 use std::sync::Arc;
-
-use serde::Deserialize;
 
 use crate::bvh::BvhNode;
 use crate::hittable::Hittable;
@@ -10,66 +13,6 @@ use crate::lights::LightList;
 use crate::material::Material;
 use crate::sphere::Sphere;
 use crate::vec3::{Color, Point3};
-
-#[derive(Debug, Deserialize)]
-pub struct SceneFile {
-    pub camera: CameraDesc,
-    pub render: RenderDesc,
-    pub objects: Vec<SphereDesc>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CameraDesc {
-    pub lookfrom: [f64; 3],
-    pub lookat: [f64; 3],
-    pub vup: [f64; 3],
-    pub vfov: f64,
-    pub aperture: f64,
-    pub focus_distance: f64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RenderDesc {
-    pub width: u32,
-    pub height: u32,
-    pub samples_per_pixel: u32,
-    pub max_depth: u32,
-    pub output: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SphereDesc {
-    pub center: [f64; 3],
-    pub radius: f64,
-    pub material: MaterialDesc,
-}
-
-#[derive(Debug, Deserialize)]
-pub enum MaterialDesc {
-    Lambertian { albedo: [f64; 3] },
-    Metal { albedo: [f64; 3], fuzz: f64 },
-    Dielectric { index: f64 },
-    Emissive { color: [f64; 3], intensity: f64 },
-}
-
-impl MaterialDesc {
-    fn into_material(self) -> Arc<Material> {
-        Arc::new(match self {
-            MaterialDesc::Lambertian { albedo } => Material::Lambertian {
-                albedo: arr3(albedo),
-            },
-            MaterialDesc::Metal { albedo, fuzz } => Material::Metal {
-                albedo: arr3(albedo),
-                fuzz,
-            },
-            MaterialDesc::Dielectric { index } => Material::Dielectric { index },
-            MaterialDesc::Emissive { color, intensity } => Material::Emissive {
-                color: arr3(color),
-                intensity,
-            },
-        })
-    }
-}
 
 pub struct Scene {
     pub camera: CameraDesc,
@@ -80,8 +23,11 @@ pub struct Scene {
 
 impl Scene {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
-        let text = fs::read_to_string(path)?;
-        let file: SceneFile = ron::from_str(&text)?;
+        let file = load_scene_file(path)?;
+        Ok(Self::from_scene_file(file))
+    }
+
+    pub fn from_scene_file(file: SceneFile) -> Self {
         let mut spheres: Vec<Sphere> = file
             .objects
             .into_iter()
@@ -107,12 +53,12 @@ impl Scene {
             Arc::new(BvhNode::build(std::mem::take(&mut objects)))
         };
 
-        Ok(Self {
+        Self {
             camera: file.camera,
             render: file.render,
             world,
             lights,
-        })
+        }
     }
 
     pub fn default_demo() -> Self {
@@ -188,6 +134,23 @@ impl Scene {
     }
 }
 
-fn arr3(v: [f64; 3]) -> Color {
-    Color::new(v[0], v[1], v[2])
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_file_builds_demo_lights() {
+        let scene = Scene::from_file("scenes/demo.ron").unwrap();
+        assert_eq!(scene.lights.len(), 1);
+        assert_eq!(scene.render.samples_per_pixel, 50);
+    }
+
+    #[test]
+    fn json_and_yaml_scenes_build_same_light_count_as_ron() {
+        let ron = Scene::from_file("scenes/demo.ron").unwrap();
+        let json = Scene::from_file("scenes/demo.json").unwrap();
+        let yaml = Scene::from_file("scenes/demo.yaml").unwrap();
+        assert_eq!(json.lights.len(), ron.lights.len());
+        assert_eq!(yaml.lights.len(), ron.lights.len());
+    }
 }
