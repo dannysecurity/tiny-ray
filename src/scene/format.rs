@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
+use crate::color::GammaEncoding;
 use crate::material::Material;
+use crate::sampling::AntiAliasing;
 use crate::vec3::Color;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -29,6 +31,16 @@ pub struct RenderDesc {
     pub samples_per_pixel: u32,
     pub max_depth: u32,
     pub output: String,
+    #[serde(default)]
+    pub gamma: GammaEncoding,
+    #[serde(default = "default_exposure")]
+    pub exposure: f64,
+    #[serde(default)]
+    pub aa: AntiAliasing,
+}
+
+fn default_exposure() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Deserialize, PartialEq)]

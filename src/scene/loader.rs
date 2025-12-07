@@ -39,6 +39,8 @@ pub fn load_scene_file(path: impl AsRef<Path>) -> Result<SceneFile, Box<dyn std:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::color::GammaEncoding;
+    use crate::sampling::AntiAliasing;
 
     const MINIMAL_JSON: &str = r#"{
         "camera": {
@@ -158,6 +160,54 @@ objects:
             SceneFormat::from_path(Path::new("scenes/demo.ron")),
             SceneFormat::Ron
         );
+    }
+
+    #[test]
+    fn render_desc_defaults_gamma_exposure_and_aa() {
+        let scene = SceneFormat::Json.parse(MINIMAL_JSON).unwrap();
+        assert_eq!(scene.render.gamma, GammaEncoding::Gamma2);
+        assert_eq!(scene.render.exposure, 1.0);
+        assert_eq!(scene.render.aa, AntiAliasing::Random);
+    }
+
+    #[test]
+    fn render_desc_parses_gamma_exposure_and_aa() {
+        let json = r#"{
+            "camera": {
+                "lookfrom": [0.0, 0.0, 5.0],
+                "lookat": [0.0, 0.0, 0.0],
+                "vup": [0.0, 1.0, 0.0],
+                "vfov": 45.0,
+                "aperture": 0.0,
+                "focus_distance": 1.0
+            },
+            "render": {
+                "width": 32,
+                "height": 32,
+                "samples_per_pixel": 4,
+                "max_depth": 4,
+                "output": "tonemapped.png",
+                "gamma": "srgb",
+                "exposure": 1.25,
+                "aa": "stratified"
+            },
+            "objects": []
+        }"#;
+        let scene = SceneFormat::Json.parse(json).unwrap();
+        assert_eq!(scene.render.gamma, GammaEncoding::Srgb);
+        assert_eq!(scene.render.exposure, 1.25);
+        assert_eq!(scene.render.aa, AntiAliasing::Stratified);
+    }
+
+    #[test]
+    fn studio_formats_share_gamma_and_aa_settings() {
+        let ron = load_scene_file("scenes/studio.ron").unwrap();
+        let json = load_scene_file("scenes/studio.json").unwrap();
+        let yaml = load_scene_file("scenes/studio.yaml").unwrap();
+        assert_eq!(json.render.gamma, GammaEncoding::Srgb);
+        assert_eq!(yaml.render.gamma, ron.render.gamma);
+        assert_eq!(json.render.aa, AntiAliasing::Stratified);
+        assert_eq!(yaml.render.aa, ron.render.aa);
     }
 
     #[test]

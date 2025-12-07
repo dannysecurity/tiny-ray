@@ -1,15 +1,20 @@
 mod bvh;
 mod camera;
+mod color;
 mod hittable;
 mod lights;
 mod material;
 mod ray;
 mod renderer;
+mod sampling;
 mod scene;
 mod sphere;
 mod vec3;
 
 pub use scene::Scene;
+
+use crate::color::GammaEncoding;
+use crate::sampling::AntiAliasing;
 
 use std::env;
 use std::path::PathBuf;
@@ -26,18 +31,25 @@ Arguments:
 Options:
   -o, --output PATH     Override the output image path from the scene file
   -s, --samples N       Override samples per pixel (useful for quick previews)
+      --gamma MODE      Override output gamma: gamma2, srgb, or linear
+      --exposure F      Override linear exposure multiplier (default 1.0)
+      --aa MODE         Override anti-aliasing: random or stratified
   -h, --help            Show this help message
 
 Examples:
   cargo run --release -- scenes/studio.ron
   cargo run --release -- --samples 10 --output preview.png scenes/studio.json
+  cargo run --release -- --gamma srgb --aa stratified scenes/studio.ron
 ";
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq)]
 struct CliOptions {
     scene_path: PathBuf,
     output: Option<String>,
     samples: Option<u32>,
+    gamma: Option<GammaEncoding>,
+    exposure: Option<f64>,
+    aa: Option<AntiAliasing>,
 }
 
 fn parse_args_from<I, S>(args: I) -> Result<CliOptions, String>
@@ -49,6 +61,9 @@ where
     let mut scene_path = None;
     let mut output = None;
     let mut samples = None;
+    let mut gamma = None;
+    let mut exposure = None;
+    let mut aa = None;
 
     while let Some(arg) = args.next() {
         let arg = arg.as_ref();
@@ -71,6 +86,20 @@ where
                     return Err("samples must be at least 1".into());
                 }
             }
+            "--gamma" => {
+                gamma = Some(parse_gamma(&next_value(&mut args, arg)?)?);
+            }
+            "--exposure" => {
+                let value = next_value(&mut args, arg)?;
+                exposure = Some(
+                    value
+                        .parse()
+                        .map_err(|_| format!("invalid exposure value: {value}"))?,
+                );
+            }
+            "--aa" => {
+                aa = Some(parse_aa(&next_value(&mut args, arg)?)?);
+            }
             value if value.starts_with('-') => {
                 return Err(format!("unknown option: {value}"));
             }
@@ -87,7 +116,31 @@ where
         scene_path: scene_path.unwrap_or_else(|| PathBuf::from("scenes/demo.ron")),
         output,
         samples,
+        gamma,
+        exposure,
+        aa,
     })
+}
+
+fn parse_gamma(value: &str) -> Result<GammaEncoding, String> {
+    match value {
+        "gamma2" => Ok(GammaEncoding::Gamma2),
+        "srgb" => Ok(GammaEncoding::Srgb),
+        "linear" => Ok(GammaEncoding::Linear),
+        _ => Err(format!(
+            "invalid gamma mode: {value} (expected gamma2, srgb, or linear)"
+        )),
+    }
+}
+
+fn parse_aa(value: &str) -> Result<AntiAliasing, String> {
+    match value {
+        "random" => Ok(AntiAliasing::Random),
+        "stratified" => Ok(AntiAliasing::Stratified),
+        _ => Err(format!(
+            "invalid aa mode: {value} (expected random or stratified)"
+        )),
+    }
 }
 
 fn parse_args() -> Result<CliOptions, String> {
@@ -110,6 +163,15 @@ fn apply_cli_overrides(scene: &mut Scene, options: &CliOptions) {
     }
     if let Some(samples) = options.samples {
         scene.render.samples_per_pixel = samples;
+    }
+    if let Some(gamma) = options.gamma {
+        scene.render.gamma = gamma;
+    }
+    if let Some(exposure) = options.exposure {
+        scene.render.exposure = exposure;
+    }
+    if let Some(aa) = options.aa {
+        scene.render.aa = aa;
     }
 }
 
@@ -141,6 +203,31 @@ mod tests {
         assert_eq!(options.scene_path, PathBuf::from("scenes/demo.ron"));
         assert_eq!(options.output, None);
         assert_eq!(options.samples, None);
+        assert_eq!(options.gamma, None);
+        assert_eq!(options.exposure, None);
+        assert_eq!(options.aa, None);
+    }
+
+    #[test]
+    fn parse_args_accepts_gamma_exposure_and_aa() {
+        let options = parse_args_from([
+            "--gamma",
+            "srgb",
+            "--exposure",
+            "1.5",
+            "--aa",
+            "stratified",
+            "scenes/demo.ron",
+        ])
+        .unwrap();
+        assert_eq!(options.gamma, Some(GammaEncoding::Srgb));
+        assert_eq!(options.exposure, Some(1.5));
+        assert_eq!(options.aa, Some(AntiAliasing::Stratified));
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_gamma() {
+        assert!(parse_args_from(["--gamma", "rec709"]).is_err());
     }
 
     #[test]
@@ -170,9 +257,15 @@ mod tests {
             scene_path: PathBuf::from("scenes/demo.ron"),
             output: Some("override.png".into()),
             samples: Some(4),
+            gamma: Some(GammaEncoding::Srgb),
+            exposure: Some(0.8),
+            aa: Some(AntiAliasing::Stratified),
         };
         apply_cli_overrides(&mut scene, &options);
         assert_eq!(scene.render.output, "override.png");
         assert_eq!(scene.render.samples_per_pixel, 4);
+        assert_eq!(scene.render.gamma, GammaEncoding::Srgb);
+        assert_eq!(scene.render.exposure, 0.8);
+        assert_eq!(scene.render.aa, AntiAliasing::Stratified);
     }
 }

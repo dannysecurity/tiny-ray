@@ -12,7 +12,10 @@
     "height": 450,
     "samples_per_pixel": 100,
     "max_depth": 50,
-    "output": "studio.png"
+    "output": "studio.png",
+    "gamma": "srgb",
+    "exposure": 1.0,
+    "aa": "stratified"
   },
   "objects": [
     {

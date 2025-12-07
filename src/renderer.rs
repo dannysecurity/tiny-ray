@@ -1,12 +1,14 @@
-use image::{ImageBuffer, Rgb};
+use image::ImageBuffer;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use crate::camera::Camera;
+use crate::color::ColorPipeline;
 use crate::hittable::Hittable;
 use crate::lights::LightList;
 use crate::material::Material;
 use crate::ray::Ray;
+use crate::sampling::pixel_offsets;
 use crate::scene::Scene;
 use crate::vec3::{Color, Vec3};
 
@@ -26,12 +28,19 @@ pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer =
         ImageBuffer::new(scene.render.width, scene.render.height);
 
+    let pipeline = ColorPipeline {
+        gamma: scene.render.gamma,
+        exposure: scene.render.exposure,
+    };
+
     eprintln!(
-        "Rendering {}x{} ({} spp, depth {})",
+        "Rendering {}x{} ({} spp, depth {}, gamma {:?}, aa {:?})",
         scene.render.width,
         scene.render.height,
         scene.render.samples_per_pixel,
-        scene.render.max_depth
+        scene.render.max_depth,
+        scene.render.gamma,
+        scene.render.aa,
     );
 
     for y in 0..scene.render.height {
@@ -40,9 +49,15 @@ pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
         }
         for x in 0..scene.render.width {
             let mut pixel = Color::default();
-            for _ in 0..scene.render.samples_per_pixel {
-                let u = (x as f64 + rng.gen::<f64>()) / (scene.render.width - 1) as f64;
-                let v = ((scene.render.height - 1 - y) as f64 + rng.gen::<f64>())
+            for sample in 0..scene.render.samples_per_pixel {
+                let (du, dv) = pixel_offsets(
+                    sample,
+                    scene.render.samples_per_pixel,
+                    scene.render.aa,
+                    &mut rng,
+                );
+                let u = (x as f64 + du) / (scene.render.width - 1) as f64;
+                let v = ((scene.render.height - 1 - y) as f64 + dv)
                     / (scene.render.height - 1) as f64;
                 let time = rng.gen();
                 let ray = camera.get_ray(&mut rng, u, v, time);
@@ -55,7 +70,7 @@ pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             pixel /= scene.render.samples_per_pixel as f64;
-            buffer.put_pixel(x, y, to_rgb(pixel));
+            buffer.put_pixel(x, y, pipeline.encode_pixel(pixel));
         }
     }
 
@@ -108,19 +123,6 @@ fn ray_color<R: Rng + ?Sized>(
         let t = 0.5 * (unit.y + 1.0);
         (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
     }
-}
-
-fn to_rgb(color: Color) -> Rgb<u8> {
-    Rgb([
-        linear_to_gamma(color.x),
-        linear_to_gamma(color.y),
-        linear_to_gamma(color.z),
-    ])
-}
-
-fn linear_to_gamma(v: f64) -> u8 {
-    let clamped = v.clamp(0.0, 0.999);
-    (256.0 * clamped.sqrt()).floor() as u8
 }
 
 fn point(v: &[f64; 3]) -> crate::vec3::Point3 {

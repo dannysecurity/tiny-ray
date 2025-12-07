@@ -11,6 +11,9 @@ render:
   samples_per_pixel: 100
   max_depth: 50
   output: studio.png
+  gamma: srgb
+  exposure: 1.0
+  aa: stratified
 objects:
   - center: [0.0, -1000.0, 0.0]
     radius: 1000.0

@@ -127,6 +127,9 @@ impl Scene {
                 samples_per_pixel: 50,
                 max_depth: 50,
                 output: "output.png".into(),
+                gamma: Default::default(),
+                exposure: 1.0,
+                aa: Default::default(),
             },
             world,
             lights,
@@ -160,6 +163,8 @@ mod tests {
         assert_eq!(scene.lights.len(), 1);
         assert_eq!(scene.render.output, "studio.png");
         assert_eq!(scene.render.samples_per_pixel, 100);
+        assert_eq!(scene.render.gamma, crate::color::GammaEncoding::Srgb);
+        assert_eq!(scene.render.aa, crate::sampling::AntiAliasing::Stratified);
     }
 
     #[test]
