@@ -2,6 +2,29 @@ use std::sync::Arc;
 
 use crate::hittable::{Aabb, HitRecord, Hittable};
 use crate::ray::Ray;
+use crate::vec3::Point3;
+
+fn axis_component(point: Point3, axis: usize) -> f64 {
+    match axis {
+        0 => point.x,
+        1 => point.y,
+        _ => point.z,
+    }
+}
+
+fn closest_hit(a: Option<HitRecord>, b: Option<HitRecord>) -> Option<HitRecord> {
+    match (a, b) {
+        (Some(left), Some(right)) => {
+            if left.t <= right.t {
+                Some(left)
+            } else {
+                Some(right)
+            }
+        }
+        (Some(hit), None) | (None, Some(hit)) => Some(hit),
+        (None, None) => None,
+    }
+}
 
 #[derive(Clone)]
 pub enum BvhNode {
@@ -30,29 +53,11 @@ impl BvhNode {
             return Self::Leaf { objects, bbox };
         }
 
-        let axis = bbox.max.x - bbox.min.x > bbox.max.y - bbox.min.y
-            && bbox.max.x - bbox.min.x > bbox.max.z - bbox.min.z;
-        let axis = if axis {
-            0
-        } else if bbox.max.y - bbox.min.y > bbox.max.z - bbox.min.z {
-            1
-        } else {
-            2
-        };
+        let axis = bbox.longest_axis();
 
         objects.sort_by(|a, b| {
-            let ca = a.bounding_box().min;
-            let cb = b.bounding_box().min;
-            let va = match axis {
-                0 => ca.x,
-                1 => ca.y,
-                _ => ca.z,
-            };
-            let vb = match axis {
-                0 => cb.x,
-                1 => cb.y,
-                _ => cb.z,
-            };
+            let va = axis_component(a.bounding_box().min, axis);
+            let vb = axis_component(b.bounding_box().min, axis);
             va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
         });
 
@@ -93,18 +98,7 @@ impl Hittable for BvhNode {
                 let hit_left = left.hit(ray, t_min, t_max);
                 let t_far = hit_left.as_ref().map(|h| h.t).unwrap_or(t_max);
                 let hit_right = right.hit(ray, t_min, t_far);
-                match (hit_left, hit_right) {
-                    (Some(l), Some(r)) => {
-                        if l.t <= r.t {
-                            Some(l)
-                        } else {
-                            Some(r)
-                        }
-                    }
-                    (Some(l), None) => Some(l),
-                    (None, Some(r)) => Some(r),
-                    (None, None) => None,
-                }
+                closest_hit(hit_left, hit_right)
             }
         }
     }

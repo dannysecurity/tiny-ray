@@ -29,23 +29,30 @@ impl Aabb {
         Self { min, max }
     }
 
+    /// Span along each axis from minimum to maximum corner.
+    pub fn extent(self) -> Vec3 {
+        self.max - self.min
+    }
+
+    /// Index of the longest axis (0 = x, 1 = y, 2 = z).
+    pub fn longest_axis(self) -> usize {
+        let extent = self.extent();
+        if extent.x > extent.y && extent.x > extent.z {
+            0
+        } else if extent.y > extent.z {
+            1
+        } else {
+            2
+        }
+    }
+
     pub fn hit(&self, ray: &Ray, mut t_min: f64, mut t_max: f64) -> bool {
         for axis in 0..3 {
-            let (origin, direction, min, max) = match axis {
-                0 => (ray.origin.x, ray.direction.x, self.min.x, self.max.x),
-                1 => (ray.origin.y, ray.direction.y, self.min.y, self.max.y),
-                _ => (ray.origin.z, ray.direction.z, self.min.z, self.max.z),
-            };
-
-            let inv_direction = 1.0 / direction;
-            let mut t0 = (min - origin) * inv_direction;
-            let mut t1 = (max - origin) * inv_direction;
-            if inv_direction < 0.0 {
-                std::mem::swap(&mut t0, &mut t1);
-            }
-
-            t_min = t_min.max(t0);
-            t_max = t_max.min(t1);
+            let (origin, direction, axis_min, axis_max) =
+                ray_axis_bounds(ray, self, axis);
+            let (t_near, t_far) = slab_interval(origin, direction, axis_min, axis_max);
+            t_min = t_min.max(t_near);
+            t_max = t_max.min(t_far);
             if t_max <= t_min {
                 return false;
             }
@@ -66,6 +73,29 @@ impl Aabb {
         }
         Self { min, max }
     }
+}
+
+fn ray_axis_bounds(ray: &Ray, bbox: &Aabb, axis: usize) -> (f64, f64, f64, f64) {
+    match axis {
+        0 => (ray.origin.x, ray.direction.x, bbox.min.x, bbox.max.x),
+        1 => (ray.origin.y, ray.direction.y, bbox.min.y, bbox.max.y),
+        _ => (ray.origin.z, ray.direction.z, bbox.min.z, bbox.max.z),
+    }
+}
+
+fn slab_interval(
+    origin: f64,
+    direction: f64,
+    axis_min: f64,
+    axis_max: f64,
+) -> (f64, f64) {
+    let inv_direction = 1.0 / direction;
+    let mut t_near = (axis_min - origin) * inv_direction;
+    let mut t_far = (axis_max - origin) * inv_direction;
+    if inv_direction < 0.0 {
+        std::mem::swap(&mut t_near, &mut t_far);
+    }
+    (t_near, t_far)
 }
 
 pub fn set_face_normal(record: &mut HitRecord, ray: &Ray, outward_normal: Vec3) {
