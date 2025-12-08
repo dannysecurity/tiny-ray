@@ -217,6 +217,31 @@ objects:
     }
 
     #[test]
+    fn render_desc_parses_halton_aa() {
+        let json = r#"{
+            "camera": {
+                "lookfrom": [0.0, 0.0, 5.0],
+                "lookat": [0.0, 0.0, 0.0],
+                "vup": [0.0, 1.0, 0.0],
+                "vfov": 45.0,
+                "aperture": 0.0,
+                "focus_distance": 1.0
+            },
+            "render": {
+                "width": 32,
+                "height": 32,
+                "samples_per_pixel": 16,
+                "max_depth": 4,
+                "output": "halton.png",
+                "aa": "halton"
+            },
+            "objects": []
+        }"#;
+        let scene = SceneFormat::Json.parse(json).unwrap();
+        assert_eq!(scene.render.aa, AntiAliasing::Halton);
+    }
+
+    #[test]
     fn studio_formats_share_gamma_and_aa_settings() {
         let ron = load_scene_file("scenes/studio.ron").unwrap();
         let json = load_scene_file("scenes/studio.json").unwrap();

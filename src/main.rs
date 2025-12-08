@@ -33,7 +33,7 @@ Options:
   -s, --samples N       Override samples per pixel (useful for quick previews)
       --gamma MODE      Override output gamma: gamma2, srgb, or linear
       --exposure F      Override linear exposure multiplier (default 1.0)
-      --aa MODE         Override anti-aliasing: random or stratified
+      --aa MODE         Override anti-aliasing: random, stratified, or halton
   -h, --help            Show this help message
 
 Examples:
@@ -137,8 +137,9 @@ fn parse_aa(value: &str) -> Result<AntiAliasing, String> {
     match value {
         "random" => Ok(AntiAliasing::Random),
         "stratified" => Ok(AntiAliasing::Stratified),
+        "halton" => Ok(AntiAliasing::Halton),
         _ => Err(format!(
-            "invalid aa mode: {value} (expected random or stratified)"
+            "invalid aa mode: {value} (expected random, stratified, or halton)"
         )),
     }
 }
@@ -223,6 +224,12 @@ mod tests {
         assert_eq!(options.gamma, Some(GammaEncoding::Srgb));
         assert_eq!(options.exposure, Some(1.5));
         assert_eq!(options.aa, Some(AntiAliasing::Stratified));
+    }
+
+    #[test]
+    fn parse_args_accepts_halton_aa() {
+        let options = parse_args_from(["--aa", "halton", "scenes/demo.ron"]).unwrap();
+        assert_eq!(options.aa, Some(AntiAliasing::Halton));
     }
 
     #[test]

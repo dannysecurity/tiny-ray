@@ -35,7 +35,7 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `-s`, `--samples N` | Trace `N` samples per pixel (minimum 1) |
 | `--gamma MODE` | Output encoding: `gamma2` (default), `srgb`, or `linear` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
-| `--aa MODE` | Anti-aliasing: `random` (default) or `stratified` |
+| `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
 | `-h`, `--help` | Print usage |
 
 ## Example render: glass studio
@@ -160,9 +160,9 @@ Materials use an externally tagged enum in JSON and YAML (`"Lambertian": { "albe
 | `output` | — | Output PNG path |
 | `gamma` | `gamma2` | Output encoding: `gamma2`, `srgb`, or `linear` |
 | `exposure` | `1.0` | Linear exposure multiplier before gamma encoding |
-| `aa` | `random` | Sub-pixel sampling: `random` or `stratified` |
+| `aa` | `random` | Sub-pixel sampling: `random`, `stratified`, or `halton` |
 
-Tracing accumulates linear radiance; the color pipeline applies exposure and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing:
+Tracing accumulates linear radiance; the color pipeline applies exposure and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing. For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
 
 ```ron
 render: (

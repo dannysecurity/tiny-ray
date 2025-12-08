@@ -9,6 +9,8 @@ pub enum AntiAliasing {
     Random,
     /// Jittered stratified grid; reduces clumping for a given sample count.
     Stratified,
+    /// Halton quasi-random sequence (bases 2 and 3); low-discrepancy offsets.
+    Halton,
 }
 
 impl Default for AntiAliasing {
@@ -27,7 +29,27 @@ pub fn pixel_offsets<R: Rng + ?Sized>(
     match strategy {
         AntiAliasing::Random => (rng.gen(), rng.gen()),
         AntiAliasing::Stratified => stratified_offset(sample_index, samples_per_pixel, rng),
+        AntiAliasing::Halton => halton_offset(sample_index),
     }
+}
+
+/// Halton sequence sample in [0, 1) for 1-based `index` and prime `base`.
+fn halton(index: u32, base: u32) -> f64 {
+    let mut f = 1.0;
+    let mut result = 0.0;
+    let mut i = index;
+    while i > 0 {
+        f /= base as f64;
+        result += f * (i % base) as f64;
+        i /= base;
+    }
+    result
+}
+
+fn halton_offset(sample_index: u32) -> (f64, f64) {
+    // Halton sequences are conventionally 1-indexed; skip index 0 (all zeros).
+    let index = sample_index + 1;
+    (halton(index, 2), halton(index, 3))
 }
 
 fn stratified_offset<R: Rng + ?Sized>(
@@ -104,5 +126,45 @@ mod tests {
             let b = pixel_offsets(sample, 9, AntiAliasing::Stratified, &mut rng_b);
             assert_eq!(a, b);
         }
+    }
+
+    #[test]
+    fn halton_offsets_stay_inside_pixel() {
+        let mut rng = StdRng::seed_from_u64(0);
+        for sample in 0..64 {
+            let (du, dv) = pixel_offsets(sample, 64, AntiAliasing::Halton, &mut rng);
+            assert!((0.0..1.0).contains(&du));
+            assert!((0.0..1.0).contains(&dv));
+        }
+    }
+
+    #[test]
+    fn halton_is_deterministic_and_independent_of_rng() {
+        let mut rng_a = StdRng::seed_from_u64(1);
+        let mut rng_b = StdRng::seed_from_u64(99);
+        for sample in 0..16 {
+            let a = pixel_offsets(sample, 16, AntiAliasing::Halton, &mut rng_a);
+            let b = pixel_offsets(sample, 16, AntiAliasing::Halton, &mut rng_b);
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn halton_samples_are_unique_for_small_counts() {
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut offsets = Vec::new();
+        for sample in 0..16 {
+            offsets.push(pixel_offsets(sample, 16, AntiAliasing::Halton, &mut rng));
+        }
+        offsets.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        offsets.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-12 && (a.1 - b.1).abs() < 1e-12);
+        assert_eq!(offsets.len(), 16);
+    }
+
+    #[test]
+    fn halton_sequence_matches_known_values() {
+        assert!((halton(1, 2) - 0.5).abs() < 1e-12);
+        assert!((halton(2, 2) - 0.25).abs() < 1e-12);
+        assert!((halton(1, 3) - 1.0 / 3.0).abs() < 1e-12);
     }
 }
