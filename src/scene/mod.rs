@@ -159,12 +159,22 @@ mod tests {
 
     #[test]
     fn studio_scene_loads_emissive_light_and_bvh() {
-        let scene = Scene::from_file("scenes/studio.ron").unwrap();
-        assert_eq!(scene.lights.len(), 1);
-        assert_eq!(scene.render.output, "studio.png");
-        assert_eq!(scene.render.samples_per_pixel, 100);
-        assert_eq!(scene.render.gamma, crate::color::GammaEncoding::Srgb);
-        assert_eq!(scene.render.aa, crate::sampling::AntiAliasing::Stratified);
+        for path in ["scenes/studio.ron", "scenes/studio.json", "scenes/studio.yaml"] {
+            let scene = Scene::from_file(path).unwrap();
+            assert_eq!(scene.lights.len(), 1, "{path}");
+            assert_eq!(scene.render.output, "studio.png", "{path}");
+            assert_eq!(scene.render.samples_per_pixel, 100, "{path}");
+            assert_eq!(
+                scene.render.gamma,
+                crate::color::GammaEncoding::Srgb,
+                "{path}"
+            );
+            assert_eq!(
+                scene.render.aa,
+                crate::sampling::AntiAliasing::Stratified,
+                "{path}"
+            );
+        }
     }
 
     #[test]

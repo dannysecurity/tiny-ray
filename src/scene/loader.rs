@@ -10,6 +10,16 @@ pub enum SceneFormat {
     Yaml,
 }
 
+impl std::fmt::Display for SceneFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SceneFormat::Ron => write!(f, "RON"),
+            SceneFormat::Json => write!(f, "JSON"),
+            SceneFormat::Yaml => write!(f, "YAML"),
+        }
+    }
+}
+
 impl SceneFormat {
     pub fn from_path(path: &Path) -> Self {
         match path.extension().and_then(|ext| ext.to_str()) {
@@ -33,7 +43,14 @@ pub fn load_scene_file(path: impl AsRef<Path>) -> Result<SceneFile, Box<dyn std:
     let path = path.as_ref();
     let text = fs::read_to_string(path)?;
     let format = SceneFormat::from_path(path);
-    format.parse(&text)
+    format.parse(&text).map_err(|e| {
+        format!(
+            "failed to parse {} as {}: {e}",
+            path.display(),
+            format
+        )
+        .into()
+    })
 }
 
 #[cfg(test)]
@@ -234,5 +251,15 @@ objects:
         assert_eq!(json.objects.len(), ron.objects.len());
         assert_eq!(json.render.output, ron.render.output);
         assert_eq!(json.camera.lookfrom, ron.camera.lookfrom);
+    }
+
+    #[test]
+    fn parse_error_includes_path_and_format() {
+        let path = std::env::temp_dir().join("tiny_ray_bad_scene.json");
+        fs::write(&path, "{ not valid json").unwrap();
+        let err = load_scene_file(&path).unwrap_err().to_string();
+        assert!(err.contains("JSON"), "{err}");
+        assert!(err.contains(path.display().to_string().as_str()), "{err}");
+        let _ = fs::remove_file(path);
     }
 }
