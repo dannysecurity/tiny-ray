@@ -42,6 +42,15 @@ impl Vec3 {
         self.x.abs() < 1e-8 && self.y.abs() < 1e-8 && self.z.abs() < 1e-8
     }
 
+    /// Component along axis index (0 = x, 1 = y, 2 = z).
+    pub fn axis(self, index: usize) -> f64 {
+        match index {
+            0 => self.x,
+            1 => self.y,
+            _ => self.z,
+        }
+    }
+
     pub fn reflect(self, normal: Self) -> Self {
         self - normal * (2.0 * self.dot(normal))
     }

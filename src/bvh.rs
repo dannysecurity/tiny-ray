@@ -2,15 +2,6 @@ use std::sync::Arc;
 
 use crate::hittable::{Aabb, HitRecord, Hittable};
 use crate::ray::Ray;
-use crate::vec3::Point3;
-
-fn axis_component(point: Point3, axis: usize) -> f64 {
-    match axis {
-        0 => point.x,
-        1 => point.y,
-        _ => point.z,
-    }
-}
 
 fn closest_hit(a: Option<HitRecord>, b: Option<HitRecord>) -> Option<HitRecord> {
     match (a, b) {
@@ -24,6 +15,23 @@ fn closest_hit(a: Option<HitRecord>, b: Option<HitRecord>) -> Option<HitRecord> 
         (Some(hit), None) | (None, Some(hit)) => Some(hit),
         (None, None) => None,
     }
+}
+
+fn closest_hit_in_objects(
+    objects: &[Arc<dyn Hittable>],
+    ray: &Ray,
+    t_min: f64,
+    t_max: f64,
+) -> Option<HitRecord> {
+    let mut closest: Option<HitRecord> = None;
+    let mut closest_t = t_max;
+    for object in objects {
+        if let Some(hit) = object.hit(ray, t_min, closest_t) {
+            closest_t = hit.t;
+            closest = Some(hit);
+        }
+    }
+    closest
 }
 
 #[derive(Clone)]
@@ -56,8 +64,8 @@ impl BvhNode {
         let axis = bbox.longest_axis();
 
         objects.sort_by(|a, b| {
-            let va = axis_component(a.bounding_box().min, axis);
-            let vb = axis_component(b.bounding_box().min, axis);
+            let va = a.bounding_box().min.axis(axis);
+            let vb = b.bounding_box().min.axis(axis);
             va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
         });
 
@@ -83,17 +91,7 @@ impl Hittable for BvhNode {
         }
 
         match self {
-            BvhNode::Leaf { objects, .. } => {
-                let mut closest: Option<HitRecord> = None;
-                let mut closest_t = t_max;
-                for object in objects {
-                    if let Some(hit) = object.hit(ray, t_min, closest_t) {
-                        closest_t = hit.t;
-                        closest = Some(hit);
-                    }
-                }
-                closest
-            }
+            BvhNode::Leaf { objects, .. } => closest_hit_in_objects(objects, ray, t_min, t_max),
             BvhNode::Branch { left, right, .. } => {
                 let hit_left = left.hit(ray, t_min, t_max);
                 let t_far = hit_left.as_ref().map(|h| h.t).unwrap_or(t_max);
@@ -104,9 +102,7 @@ impl Hittable for BvhNode {
     }
 
     fn bounding_box(&self) -> Aabb {
-        match self {
-            BvhNode::Leaf { bbox, .. } | BvhNode::Branch { bbox, .. } => *bbox,
-        }
+        self.bbox()
     }
 }
 
@@ -139,15 +135,7 @@ mod tests {
         t_min: f64,
         t_max: f64,
     ) -> Option<HitRecord> {
-        let mut closest: Option<HitRecord> = None;
-        let mut closest_t = t_max;
-        for object in objects {
-            if let Some(hit) = object.hit(ray, t_min, closest_t) {
-                closest_t = hit.t;
-                closest = Some(hit);
-            }
-        }
-        closest
+        closest_hit_in_objects(objects, ray, t_min, t_max)
     }
 
     #[test]

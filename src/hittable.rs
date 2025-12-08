@@ -76,11 +76,12 @@ impl Aabb {
 }
 
 fn ray_axis_bounds(ray: &Ray, bbox: &Aabb, axis: usize) -> (f64, f64, f64, f64) {
-    match axis {
-        0 => (ray.origin.x, ray.direction.x, bbox.min.x, bbox.max.x),
-        1 => (ray.origin.y, ray.direction.y, bbox.min.y, bbox.max.y),
-        _ => (ray.origin.z, ray.direction.z, bbox.min.z, bbox.max.z),
-    }
+    (
+        ray.origin.axis(axis),
+        ray.direction.axis(axis),
+        bbox.min.axis(axis),
+        bbox.max.axis(axis),
+    )
 }
 
 fn slab_interval(
