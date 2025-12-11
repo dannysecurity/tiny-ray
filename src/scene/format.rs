@@ -12,6 +12,8 @@ pub struct SceneFile {
     pub camera: CameraDesc,
     pub render: RenderDesc,
     pub objects: Vec<SphereDesc>,
+    #[serde(default)]
+    pub planes: Vec<PlaneDesc>,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -47,6 +49,13 @@ fn default_exposure() -> f64 {
 pub struct SphereDesc {
     pub center: [f64; 3],
     pub radius: f64,
+    pub material: MaterialDesc,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct PlaneDesc {
+    pub point: [f64; 3],
+    pub normal: [f64; 3],
     pub material: MaterialDesc,
 }
 

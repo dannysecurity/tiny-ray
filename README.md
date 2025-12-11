@@ -4,7 +4,7 @@ A minimal path tracer written from scratch in Rust. Renders scenes of spheres wi
 
 ## Features
 
-- **Primitives** — analytic sphere intersection
+- **Primitives** — analytic sphere intersection and infinite planes
 - **Materials** — Lambertian diffuse, fuzzy metal, dielectric (glass), and emissive light sources
 - **Lighting** — emissive spheres act as area lights with next-event estimation (direct light sampling and shadow rays); sky gradient for ambient fill
 - **Acceleration** — SAH-style axis split BVH built over scene objects
@@ -86,9 +86,64 @@ Scene excerpt (RON):
 
 The same scene is available as `scenes/studio.json` and `scenes/studio.yaml`.
 
+## Example render: Cornell box
+
+The `scenes/cornell.*` files build a classic Cornell box from five infinite planes — white floor, ceiling, and back wall, a red left wall, and a green right wall — instead of the giant-sphere room hack used in `studio.*`. Three spheres on the floor showcase glass, metal, and diffuse materials; a small emissive sphere in the ceiling provides area lighting.
+
+```bash
+cargo run --release -- scenes/cornell.ron
+# writes cornell.png (800×450, 100 spp)
+
+cargo run --release -- --samples 16 --output cornell-preview.png scenes/cornell.json
+```
+
+Scene excerpt (RON):
+
+```ron
+(
+    camera: (
+        lookfrom: (0.0, 1.4, 3.8),
+        lookat: (0.0, 1.0, 0.0),
+        vfov: 40.0,
+    ),
+    render: (
+        width: 800,
+        height: 450,
+        samples_per_pixel: 100,
+        max_depth: 50,
+        output: "cornell.png",
+        gamma: srgb,
+        aa: stratified,
+    ),
+    objects: [
+        (
+            center: (0.0, 0.5, 0.0),
+            radius: 0.5,
+            material: Dielectric(index: 1.5),
+        ),
+        // ... ceiling light, metal and diffuse spheres
+    ],
+    planes: [
+        (
+            point: (0.0, 0.0, 0.0),
+            normal: (0.0, 1.0, 0.0),
+            material: Lambertian(albedo: (0.73, 0.73, 0.73)),
+        ),
+        (
+            point: (-1.4, 0.0, 0.0),
+            normal: (1.0, 0.0, 0.0),
+            material: Lambertian(albedo: (0.65, 0.05, 0.05)),
+        ),
+        // ... ceiling, back wall, and right wall
+    ],
+)
+```
+
+Spheres go in `objects`; room walls and floors go in the optional `planes` array. Existing sphere-only scene files are unchanged. The same scene is available as `scenes/cornell.json` and `scenes/cornell.yaml`.
+
 ## Scene format
 
-Scenes are loaded by file extension (`.ron`, `.json`, `.yaml`/`.yml`). Each file describes the camera, render settings, and a list of spheres. The same schema works across all three formats.
+Scenes are loaded by file extension (`.ron`, `.json`, `.yaml`/`.yml`). Each file describes the camera, render settings, a list of spheres (`objects`), and an optional list of planes (`planes`). The same schema works across all three formats.
 
 ### RON example
 
@@ -186,6 +241,15 @@ render: (
 | `Dielectric` | `index` | Glass / water with index of refraction |
 | `Emissive` | `color`, `intensity` | Self-illuminating light source |
 
+### Object types
+
+| Type | Array | Fields | Description |
+|------|-------|--------|-------------|
+| Sphere | `objects` | `center`, `radius`, `material` | Analytic sphere primitive |
+| Plane | `planes` | `point`, `normal`, `material` | Infinite plane through `point` with outward `normal` |
+
+The `planes` array is optional and defaults to empty, so existing sphere-only scenes load unchanged.
+
 ## Project layout
 
 ```
@@ -193,6 +257,7 @@ src/
   vec3.rs       — vectors, colors, sampling helpers
   ray.rs        — ray origin + direction
   sphere.rs     — sphere primitive
+  plane.rs      — infinite plane primitive
   material.rs   — BSDF-style scatter functions
   hittable.rs   — hit records and AABB tests
   bvh.rs        — bounding volume hierarchy
@@ -202,7 +267,7 @@ src/
   scene.rs      — scene loader (RON/JSON/YAML) and default demo
   lights.rs     — emissive sphere lights and direct sampling
   renderer.rs   — Monte Carlo path tracing loop
-scenes/         — example scene files (demo, studio)
+scenes/         — example scene files (demo, studio, cornell)
 ```
 
 ## License

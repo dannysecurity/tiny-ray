@@ -4,6 +4,7 @@ mod color;
 mod hittable;
 mod lights;
 mod material;
+mod plane;
 mod ray;
 mod renderer;
 mod sampling;
@@ -22,7 +23,7 @@ use std::path::PathBuf;
 const USAGE: &str = "\
 Usage: tiny-ray [OPTIONS] [SCENE]
 
-Path-traced sphere renderer. Loads a scene file (RON, JSON, or YAML) and writes
+Path-traced sphere and plane renderer. Loads a scene file (RON, JSON, or YAML) and writes
 an image to the path given in the scene, or overridden with --output.
 
 Arguments:

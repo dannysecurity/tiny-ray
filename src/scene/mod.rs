@@ -11,9 +11,9 @@ use crate::bvh::BvhNode;
 use crate::hittable::Hittable;
 use crate::lights::LightList;
 use crate::material::Material;
+use crate::plane::Plane;
 use crate::sphere::Sphere;
-use crate::vec3::{Color, Point3};
-
+use crate::vec3::{Color, Point3, Vec3};
 pub struct Scene {
     pub camera: CameraDesc,
     pub render: RenderDesc,
@@ -39,11 +39,25 @@ impl Scene {
                 )
             })
             .collect();
-        let lights = LightList::from_spheres(&spheres);
-        let mut objects: Vec<Arc<dyn Hittable>> = spheres
-            .drain(..)
-            .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
+
+        let mut objects: Vec<Arc<dyn Hittable>> = file
+            .planes
+            .into_iter()
+            .map(|p| {
+                Arc::new(Plane::new(
+                    Point3::new(p.point[0], p.point[1], p.point[2]),
+                    Vec3::new(p.normal[0], p.normal[1], p.normal[2]),
+                    p.material.into_material(),
+                )) as Arc<dyn Hittable>
+            })
             .collect();
+
+        let lights = LightList::from_spheres(&spheres);
+        objects.extend(
+            spheres
+                .drain(..)
+                .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>),
+        );
 
         let world: Arc<dyn Hittable> = if objects.len() > 4 {
             Arc::new(BvhNode::build(objects))
@@ -187,5 +201,40 @@ mod tests {
         assert_eq!(json.objects.len(), ron.objects.len());
         assert_eq!(yaml.objects.len(), ron.objects.len());
         assert_eq!(ron.objects.len(), 8);
+    }
+
+    #[test]
+    fn cornell_scene_loads_planes_and_spheres() {
+        for path in ["scenes/cornell.ron", "scenes/cornell.json", "scenes/cornell.yaml"] {
+            let scene = Scene::from_file(path).unwrap();
+            assert_eq!(scene.lights.len(), 1, "{path}");
+            assert_eq!(scene.render.output, "cornell.png", "{path}");
+            assert_eq!(scene.render.samples_per_pixel, 100, "{path}");
+            assert_eq!(
+                scene.render.gamma,
+                crate::color::GammaEncoding::Srgb,
+                "{path}"
+            );
+            assert_eq!(
+                scene.render.aa,
+                crate::sampling::AntiAliasing::Stratified,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn cornell_formats_match_object_count() {
+        use super::load_scene_file;
+
+        let ron = load_scene_file("scenes/cornell.ron").unwrap();
+        let json = load_scene_file("scenes/cornell.json").unwrap();
+        let yaml = load_scene_file("scenes/cornell.yaml").unwrap();
+        assert_eq!(json.objects.len(), ron.objects.len());
+        assert_eq!(yaml.objects.len(), ron.objects.len());
+        assert_eq!(ron.objects.len(), 4);
+        assert_eq!(ron.planes.len(), 5);
+        assert_eq!(json.planes.len(), ron.planes.len());
+        assert_eq!(yaml.planes.len(), ron.planes.len());
     }
 }

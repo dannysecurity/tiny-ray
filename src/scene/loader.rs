@@ -155,7 +155,8 @@ objects:
         let scene = SceneFormat::Ron.parse(MINIMAL_RON).unwrap();
         assert!(matches!(
             scene.objects[0].material,
-            super::super::format::MaterialDesc::Dielectric { index } if (index - 1.5).abs() < 1e-9
+            super::super::format::MaterialDesc::Dielectric { index }
+            if (index - 1.5).abs() < 1e-9
         ));
     }
 
