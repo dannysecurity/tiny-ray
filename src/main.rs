@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod geometry_tests;
+
 mod bvh;
 mod camera;
 mod color;

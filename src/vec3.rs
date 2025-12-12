@@ -203,3 +203,128 @@ impl DivAssign<f64> for Vec3 {
 
 pub type Color = Vec3;
 pub type Point3 = Vec3;
+
+#[cfg(test)]
+mod tests {
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    use super::*;
+    use crate::geometry_tests::{assert_close, assert_length_close, assert_vec3_close};
+
+    #[test]
+    fn arithmetic_operators_combine_components() {
+        let a = Vec3::new(1.0, 2.0, 3.0);
+        let b = Vec3::new(4.0, 5.0, 6.0);
+        assert_vec3_close(a + b, Vec3::new(5.0, 7.0, 9.0));
+        assert_vec3_close(a - b, Vec3::new(-3.0, -3.0, -3.0));
+        assert_vec3_close(a * b, Vec3::new(4.0, 10.0, 18.0));
+        assert_vec3_close(a * 2.0, Vec3::new(2.0, 4.0, 6.0));
+        assert_vec3_close(2.0 * a, Vec3::new(2.0, 4.0, 6.0));
+        assert_vec3_close(a / 2.0, Vec3::new(0.5, 1.0, 1.5));
+        assert_vec3_close(-a, Vec3::new(-1.0, -2.0, -3.0));
+    }
+
+    #[test]
+    fn assign_operators_update_in_place() {
+        let mut v = Vec3::new(1.0, 2.0, 3.0);
+        v += Vec3::new(1.0, 1.0, 1.0);
+        assert_vec3_close(v, Vec3::new(2.0, 3.0, 4.0));
+        v -= Vec3::new(1.0, 1.0, 1.0);
+        assert_vec3_close(v, Vec3::new(1.0, 2.0, 3.0));
+        v *= 2.0;
+        assert_vec3_close(v, Vec3::new(2.0, 4.0, 6.0));
+        v /= 2.0;
+        assert_vec3_close(v, Vec3::new(1.0, 2.0, 3.0));
+        v *= Vec3::new(2.0, 3.0, 4.0);
+        assert_vec3_close(v, Vec3::new(2.0, 6.0, 12.0));
+    }
+
+    #[test]
+    fn dot_and_cross_follow_orthonormal_basis() {
+        let x = Vec3::new(1.0, 0.0, 0.0);
+        let y = Vec3::new(0.0, 1.0, 0.0);
+        let z = Vec3::new(0.0, 0.0, 1.0);
+        assert_close(x.dot(y), 0.0);
+        assert_close(x.dot(x), 1.0);
+        assert_vec3_close(x.cross(y), z);
+        assert_vec3_close(y.cross(z), x);
+    }
+
+    #[test]
+    fn length_and_normalize_use_pythagorean_triple() {
+        let v = Vec3::new(3.0, 4.0, 0.0);
+        assert_close(v.length_squared(), 25.0);
+        assert_close(v.length(), 5.0);
+        assert_length_close(v.normalize(), 1.0);
+        assert_vec3_close(v.normalize(), Vec3::new(0.6, 0.8, 0.0));
+    }
+
+    #[test]
+    fn reflect_bounces_off_horizontal_surface() {
+        let incident = Vec3::new(1.0, -1.0, 0.0);
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        assert_vec3_close(incident.reflect(normal), Vec3::new(1.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn refract_transmits_through_interface() {
+        let unit = Vec3::new(0.0, -1.0, 0.0);
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        let eta = 1.0 / 1.5;
+        let refracted = unit.refract(normal, eta).unwrap();
+        assert!(refracted.y < 0.0);
+        assert_length_close(refracted, 1.0);
+    }
+
+    #[test]
+    fn refract_returns_none_on_total_internal_reflection() {
+        let incident = Vec3::new(3.0_f64.sqrt() / 2.0, 0.5, 0.0);
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        assert!(incident.refract(normal, 1.5).is_none());
+    }
+
+    #[test]
+    fn near_zero_detects_tiny_components() {
+        assert!(Vec3::new(1e-9, 0.0, 0.0).near_zero());
+        assert!(!Vec3::new(1e-7, 0.0, 0.0).near_zero());
+    }
+
+    #[test]
+    fn axis_selects_components_and_falls_back_to_z() {
+        let v = Vec3::new(1.0, 2.0, 3.0);
+        assert_close(v.axis(0), 1.0);
+        assert_close(v.axis(1), 2.0);
+        assert_close(v.axis(2), 3.0);
+        assert_close(v.axis(99), 3.0);
+    }
+
+    #[test]
+    fn random_unit_vectors_have_unit_length_with_seeded_rng() {
+        let mut rng = StdRng::seed_from_u64(42);
+        for _ in 0..64 {
+            assert_length_close(Vec3::random_unit_vector(&mut rng), 1.0);
+        }
+    }
+
+    #[test]
+    fn random_in_hemisphere_faces_the_given_normal() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        for _ in 0..64 {
+            let sample = Vec3::random_in_hemisphere(&mut rng, normal);
+            assert!(sample.dot(normal) > 0.0);
+        }
+    }
+
+    #[test]
+    fn random_in_unit_disk_stays_in_xy_plane() {
+        let mut rng = StdRng::seed_from_u64(11);
+        for _ in 0..64 {
+            let sample = Vec3::random_in_unit_disk(&mut rng);
+            assert_close(sample.z, 0.0);
+            assert!(sample.length_squared() < 1.0);
+        }
+    }
+}
+

@@ -107,3 +107,89 @@ pub fn set_face_normal(record: &mut HitRecord, ray: &Ray, outward_normal: Vec3) 
         -outward_normal
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry_tests::{assert_vec3_close, ray_from, test_material};
+
+    fn unit_cube() -> Aabb {
+        Aabb::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 1.0, 1.0))
+    }
+
+    #[test]
+    fn extent_reports_axis_spans() {
+        let bbox = Aabb::new(Point3::new(1.0, 2.0, 3.0), Point3::new(4.0, 6.0, 8.0));
+        assert_vec3_close(bbox.extent(), Vec3::new(3.0, 4.0, 5.0));
+    }
+
+    #[test]
+    fn longest_axis_prefers_largest_extent() {
+        let x_long = Aabb::new(Point3::new(0.0, 0.0, 0.0), Point3::new(5.0, 1.0, 1.0));
+        let y_long = Aabb::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 5.0, 1.0));
+        let z_long = Aabb::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 5.0));
+        assert_eq!(x_long.longest_axis(), 0);
+        assert_eq!(y_long.longest_axis(), 1);
+        assert_eq!(z_long.longest_axis(), 2);
+    }
+
+    #[test]
+    fn surrounding_box_unions_child_bounds() {
+        let a = Aabb::new(Point3::new(-2.0, 0.0, 0.0), Point3::new(-1.0, 1.0, 1.0));
+        let b = Aabb::new(Point3::new(1.0, -3.0, 2.0), Point3::new(4.0, 0.0, 5.0));
+        let merged = Aabb::surrounding_box(&[a, b]);
+        assert_vec3_close(merged.min, Point3::new(-2.0, -3.0, 0.0));
+        assert_vec3_close(merged.max, Point3::new(4.0, 1.0, 5.0));
+    }
+
+    #[test]
+    fn aabb_hit_accepts_ray_through_center() {
+        let bbox = unit_cube();
+        let ray = ray_from((0.0, 0.0, -5.0), (0.0, 0.0, 1.0));
+        assert!(bbox.hit(&ray, 0.001, f64::INFINITY));
+    }
+
+    #[test]
+    fn aabb_hit_rejects_ray_missing_box() {
+        let bbox = unit_cube();
+        let ray = ray_from((0.0, 5.0, 0.0), (1.0, 0.0, 0.0));
+        assert!(!bbox.hit(&ray, 0.001, f64::INFINITY));
+    }
+
+    #[test]
+    fn aabb_hit_handles_negative_direction() {
+        let bbox = unit_cube();
+        let ray = ray_from((0.0, 0.0, 5.0), (0.0, 0.0, -1.0));
+        assert!(bbox.hit(&ray, 0.001, f64::INFINITY));
+    }
+
+    #[test]
+    fn aabb_hit_honors_t_interval() {
+        let bbox = unit_cube();
+        let ray = ray_from((0.0, 0.0, -5.0), (0.0, 0.0, 1.0));
+        assert!(!bbox.hit(&ray, 0.001, 3.0));
+        assert!(bbox.hit(&ray, 0.001, 5.0));
+    }
+
+    #[test]
+    fn set_face_normal_orients_toward_ray_origin() {
+        let outward = Vec3::new(0.0, 1.0, 0.0);
+        let mut record = HitRecord {
+            point: Point3::new(0.0, 0.0, 0.0),
+            normal: outward,
+            t: 1.0,
+            front_face: false,
+            material: test_material(),
+        };
+
+        let front_ray = ray_from((0.0, 1.0, 0.0), (0.0, -1.0, 0.0));
+        set_face_normal(&mut record, &front_ray, outward);
+        assert!(record.front_face);
+        assert_vec3_close(record.normal, outward);
+
+        let back_ray = ray_from((0.0, -1.0, 0.0), (0.0, 1.0, 0.0));
+        set_face_normal(&mut record, &back_ray, outward);
+        assert!(!record.front_face);
+        assert_vec3_close(record.normal, -outward);
+    }
+}
