@@ -1,0 +1,24 @@
+{
+  "include": [
+    "fragments/cornell-walls.yaml",
+    "fragments/cornell-objects.yaml"
+  ],
+  "camera": {
+    "lookfrom": [0.0, 1.4, 3.8],
+    "lookat": [0.0, 1.0, 0.0],
+    "vup": [0.0, 1.0, 0.0],
+    "vfov": 40.0,
+    "aperture": 0.0,
+    "focus_distance": 4.0
+  },
+  "render": {
+    "width": 800,
+    "height": 450,
+    "samples_per_pixel": 100,
+    "max_depth": 50,
+    "output": "cornell.png",
+    "gamma": "srgb",
+    "exposure": 1.0,
+    "aa": "stratified"
+  }
+}

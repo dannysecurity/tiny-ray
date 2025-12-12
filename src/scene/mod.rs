@@ -1,8 +1,9 @@
 mod format;
 mod loader;
+mod validate;
 
 pub use format::{CameraDesc, RenderDesc, SceneFile};
-pub use loader::load_scene_file;
+pub use loader::{load_scene_file, load_scene_file_with_format, SceneFormat};
 
 use std::path::Path;
 use std::sync::Arc;
@@ -23,11 +24,20 @@ pub struct Scene {
 
 impl Scene {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
-        let file = load_scene_file(path)?;
+        Self::from_file_with_format(path, None)
+    }
+
+    pub fn from_file_with_format(
+        path: impl AsRef<Path>,
+        format: Option<SceneFormat>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let file = load_scene_file_with_format(path, format)?;
         Ok(Self::from_scene_file(file))
     }
 
     pub fn from_scene_file(file: SceneFile) -> Self {
+        let camera = file.camera;
+        let render = file.render;
         let mut spheres: Vec<Sphere> = file
             .objects
             .into_iter()
@@ -68,8 +78,8 @@ impl Scene {
         };
 
         Self {
-            camera: file.camera,
-            render: file.render,
+            camera,
+            render,
             world,
             lights,
         }
@@ -236,5 +246,13 @@ mod tests {
         assert_eq!(ron.planes.len(), 5);
         assert_eq!(json.planes.len(), ron.planes.len());
         assert_eq!(yaml.planes.len(), ron.planes.len());
+    }
+
+    #[test]
+    fn modular_cornell_builds_same_geometry_as_monolithic() {
+        let monolithic = Scene::from_file("scenes/cornell.yaml").unwrap();
+        let modular = Scene::from_file("scenes/cornell-modular.yaml").unwrap();
+        assert_eq!(modular.lights.len(), monolithic.lights.len());
+        assert_eq!(modular.render.output, "cornell.png");
     }
 }

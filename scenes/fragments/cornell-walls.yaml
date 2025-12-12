@@ -1,0 +1,26 @@
+planes:
+  - point: [0.0, 0.0, 0.0]
+    normal: [0.0, 1.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.73, 0.73, 0.73]
+  - point: [0.0, 2.8, 0.0]
+    normal: [0.0, -1.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.73, 0.73, 0.73]
+  - point: [-1.4, 0.0, 0.0]
+    normal: [1.0, 0.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.65, 0.05, 0.05]
+  - point: [1.4, 0.0, 0.0]
+    normal: [-1.0, 0.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.12, 0.45, 0.15]
+  - point: [0.0, 0.0, -1.4]
+    normal: [0.0, 0.0, 1.0]
+    material:
+      Lambertian:
+        albedo: [0.73, 0.73, 0.73]

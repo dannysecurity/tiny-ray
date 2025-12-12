@@ -9,8 +9,14 @@ use crate::vec3::Color;
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct SceneFile {
+    /// Paths to fragment scene files, resolved relative to the including file.
+    /// Fragments contribute `objects`, `planes`, and nested `include` entries;
+    /// their `camera` and `render` blocks are ignored.
+    #[serde(default)]
+    pub include: Vec<String>,
     pub camera: CameraDesc,
     pub render: RenderDesc,
+    #[serde(default)]
     pub objects: Vec<SphereDesc>,
     #[serde(default)]
     pub planes: Vec<PlaneDesc>,

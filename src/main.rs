@@ -19,6 +19,7 @@ pub use scene::Scene;
 
 use crate::color::GammaEncoding;
 use crate::sampling::AntiAliasing;
+use crate::scene::SceneFormat;
 
 use std::env;
 use std::path::PathBuf;
@@ -35,6 +36,7 @@ Arguments:
 Options:
   -o, --output PATH     Override the output image path from the scene file
   -s, --samples N       Override samples per pixel (useful for quick previews)
+      --format FMT      Force scene parser: ron, json, or yaml (default: from extension)
       --gamma MODE      Override output gamma: gamma2, srgb, or linear
       --exposure F      Override linear exposure multiplier (default 1.0)
       --aa MODE         Override anti-aliasing: random, stratified, or halton
@@ -43,6 +45,7 @@ Options:
 Examples:
   cargo run --release -- scenes/studio.ron
   cargo run --release -- --samples 10 --output preview.png scenes/studio.json
+  cargo run --release -- --format yaml scenes/cornell-modular.yaml
   cargo run --release -- --gamma srgb --aa stratified scenes/studio.ron
 ";
 
@@ -51,6 +54,7 @@ struct CliOptions {
     scene_path: PathBuf,
     output: Option<String>,
     samples: Option<u32>,
+    format: Option<SceneFormat>,
     gamma: Option<GammaEncoding>,
     exposure: Option<f64>,
     aa: Option<AntiAliasing>,
@@ -65,6 +69,7 @@ where
     let mut scene_path = None;
     let mut output = None;
     let mut samples = None;
+    let mut format = None;
     let mut gamma = None;
     let mut exposure = None;
     let mut aa = None;
@@ -93,6 +98,9 @@ where
             "--gamma" => {
                 gamma = Some(parse_gamma(&next_value(&mut args, arg)?)?);
             }
+            "--format" => {
+                format = Some(SceneFormat::parse_name(&next_value(&mut args, arg)?)?);
+            }
             "--exposure" => {
                 let value = next_value(&mut args, arg)?;
                 exposure = Some(
@@ -120,6 +128,7 @@ where
         scene_path: scene_path.unwrap_or_else(|| PathBuf::from("scenes/demo.ron")),
         output,
         samples,
+        format,
         gamma,
         exposure,
         aa,
@@ -188,7 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     let mut scene = if options.scene_path.exists() {
-        Scene::from_file(&options.scene_path)?
+        Scene::from_file_with_format(&options.scene_path, options.format)?
     } else {
         eprintln!("Scene file not found; using built-in demo scene");
         Scene::default_demo()
@@ -211,6 +220,18 @@ mod tests {
         assert_eq!(options.gamma, None);
         assert_eq!(options.exposure, None);
         assert_eq!(options.aa, None);
+        assert_eq!(options.format, None);
+    }
+
+    #[test]
+    fn parse_args_accepts_format_override() {
+        let options = parse_args_from(["--format", "yaml", "scenes/cornell.yaml"]).unwrap();
+        assert_eq!(options.format, Some(SceneFormat::Yaml));
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_format() {
+        assert!(parse_args_from(["--format", "toml"]).is_err());
     }
 
     #[test]
@@ -268,6 +289,7 @@ mod tests {
             scene_path: PathBuf::from("scenes/demo.ron"),
             output: Some("override.png".into()),
             samples: Some(4),
+            format: None,
             gamma: Some(GammaEncoding::Srgb),
             exposure: Some(0.8),
             aa: Some(AntiAliasing::Stratified),

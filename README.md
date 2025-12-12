@@ -33,6 +33,7 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 |------|-------------|
 | `-o`, `--output PATH` | Write the image to `PATH` instead of the scene's `render.output` |
 | `-s`, `--samples N` | Trace `N` samples per pixel (minimum 1) |
+| `--format FMT` | Force scene parser: `ron`, `json`, or `yaml` (default: from extension) |
 | `--gamma MODE` | Output encoding: `gamma2` (default), `srgb`, or `linear` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
@@ -141,9 +142,31 @@ Scene excerpt (RON):
 
 Spheres go in `objects`; room walls and floors go in the optional `planes` array. Existing sphere-only scene files are unchanged. The same scene is available as `scenes/cornell.json` and `scenes/cornell.yaml`.
 
+### Modular scenes with `include`
+
+Split large JSON/YAML scenes into reusable fragments and wire them together with an `include` array. Paths are resolved relative to the file that lists them; nested includes and mixed formats (for example, a JSON root including YAML fragments) are supported.
+
+```yaml
+include:
+  - fragments/cornell-walls.yaml
+  - fragments/cornell-objects.yaml
+camera:
+  lookfrom: [0.0, 1.4, 3.8]
+  lookat: [0.0, 1.0, 0.0]
+  # ...
+render:
+  width: 800
+  height: 450
+  output: cornell.png
+```
+
+Fragment files only need geometry (`objects`, `planes`, and optional nested `include` entries). The root scene supplies `camera` and `render`. See `scenes/cornell-modular.yaml` and `scenes/fragments/` for a working example equivalent to `scenes/cornell.yaml`.
+
+After parsing, the loader validates scene semantics (positive radii, non-zero plane normals, sane render dimensions, and more) and reports clear errors before building the BVH.
+
 ## Scene format
 
-Scenes are loaded by file extension (`.ron`, `.json`, `.yaml`/`.yml`). Each file describes the camera, render settings, a list of spheres (`objects`), and an optional list of planes (`planes`). The same schema works across all three formats.
+Scenes are loaded by file extension (`.ron`, `.json`, `.yaml`/`.yml`), with content sniffing as a fallback for extensionless files. Override the parser with `--format` when needed. Each file describes the camera, render settings, a list of spheres (`objects`), an optional list of planes (`planes`), and an optional list of fragment paths (`include`). The same schema works across all three formats.
 
 ### RON example
 
@@ -264,10 +287,15 @@ src/
   camera.rs     — thin-lens perspective camera
   color.rs      — gamma correction, exposure, and pixel encoding
   sampling.rs   — anti-aliasing sample strategies (random, stratified)
-  scene.rs      — scene loader (RON/JSON/YAML) and default demo
+  scene/
+    format.rs   — serde schema (SceneFile, descriptors)
+    loader.rs   — format detection, includes, and parsing
+    validate.rs — semantic validation after load
+    mod.rs      — runtime Scene type and world construction
   lights.rs     — emissive sphere lights and direct sampling
   renderer.rs   — Monte Carlo path tracing loop
-scenes/         — example scene files (demo, studio, cornell)
+scenes/         — example scene files (demo, studio, cornell, modular cornell)
+scenes/fragments/ — reusable geometry fragments for include-based scenes
 ```
 
 ## License
