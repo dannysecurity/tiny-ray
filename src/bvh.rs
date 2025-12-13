@@ -1,38 +1,8 @@
 use std::sync::Arc;
 
 use crate::hittable::{Aabb, HitRecord, Hittable};
+use crate::intersection::{closest_hit, closest_hit_in_objects};
 use crate::ray::Ray;
-
-fn closest_hit(a: Option<HitRecord>, b: Option<HitRecord>) -> Option<HitRecord> {
-    match (a, b) {
-        (Some(left), Some(right)) => {
-            if left.t <= right.t {
-                Some(left)
-            } else {
-                Some(right)
-            }
-        }
-        (Some(hit), None) | (None, Some(hit)) => Some(hit),
-        (None, None) => None,
-    }
-}
-
-fn closest_hit_in_objects(
-    objects: &[Arc<dyn Hittable>],
-    ray: &Ray,
-    t_min: f64,
-    t_max: f64,
-) -> Option<HitRecord> {
-    let mut closest: Option<HitRecord> = None;
-    let mut closest_t = t_max;
-    for object in objects {
-        if let Some(hit) = object.hit(ray, t_min, closest_t) {
-            closest_t = hit.t;
-            closest = Some(hit);
-        }
-    }
-    closest
-}
 
 #[derive(Clone)]
 pub enum BvhNode {
@@ -111,22 +81,11 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::material::Material;
-    use crate::sphere::Sphere;
-    use crate::vec3::{Color, Point3, Vec3};
-
-    fn test_material() -> Arc<Material> {
-        Arc::new(Material::Lambertian {
-            albedo: Color::new(0.7, 0.7, 0.7),
-        })
-    }
+    use crate::geometry_tests::unit_sphere_at;
+    use crate::vec3::{Point3, Vec3};
 
     fn make_sphere(center: (f64, f64, f64), radius: f64) -> Arc<dyn Hittable> {
-        Arc::new(Sphere::new(
-            Point3::new(center.0, center.1, center.2),
-            radius,
-            test_material(),
-        ))
+        Arc::new(unit_sphere_at(center, radius))
     }
 
     fn brute_force_hit(

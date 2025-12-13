@@ -326,5 +326,30 @@ mod tests {
             assert!(sample.length_squared() < 1.0);
         }
     }
+
+    #[test]
+    fn random_in_unit_sphere_stays_inside_ball() {
+        let mut rng = StdRng::seed_from_u64(19);
+        for _ in 0..64 {
+            let sample = Vec3::random_in_unit_sphere(&mut rng);
+            assert!(sample.length_squared() < 1.0);
+        }
+    }
+
+    #[test]
+    fn refract_with_matching_index_returns_transmitted_direction() {
+        let incident = Vec3::new(0.2, -0.8, 0.0).normalize();
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        let refracted = incident.refract(normal, 1.0).unwrap();
+        assert_length_close(refracted, 1.0);
+        assert_vec3_close(refracted, incident);
+    }
+
+    #[test]
+    fn reflect_preserves_length_for_unit_incident() {
+        let incident = Vec3::new(1.0, -1.0, 0.0).normalize();
+        let normal = Vec3::new(0.0, 1.0, 0.0);
+        assert_length_close(incident.reflect(normal), 1.0);
+    }
 }
 

@@ -1,10 +1,14 @@
 #[cfg(test)]
 mod geometry_tests;
 
+#[cfg(test)]
+mod intersection_suite;
+
 mod bvh;
 mod camera;
 mod color;
 mod hittable;
+mod intersection;
 mod lights;
 mod material;
 mod plane;
