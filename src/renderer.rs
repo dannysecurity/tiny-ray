@@ -10,6 +10,7 @@ use crate::material::Material;
 use crate::ray::Ray;
 use crate::sampling::pixel_offsets;
 use crate::scene::Scene;
+use crate::sky::SkyGradient;
 use crate::vec3::{Color, Vec3};
 
 pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
@@ -66,6 +67,7 @@ pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
                     &ray,
                     scene.world.as_ref(),
                     &scene.lights,
+                    &scene.sky,
                     scene.render.max_depth,
                 );
             }
@@ -84,6 +86,7 @@ fn ray_color<R: Rng + ?Sized>(
     ray: &Ray,
     world: &dyn Hittable,
     lights: &LightList,
+    sky: &SkyGradient,
     depth: u32,
 ) -> Color {
     if depth == 0 {
@@ -112,16 +115,14 @@ fn ray_color<R: Rng + ?Sized>(
 
         if let Some((attenuation, scattered)) = hit.material.scatter(rng, ray, &hit) {
             color += attenuation
-                * ray_color(rng, &scattered, world, lights, depth - 1);
+                * ray_color(rng, &scattered, world, lights, sky, depth - 1);
         } else {
             color += emitted;
         }
 
         color
     } else {
-        let unit = ray.direction.normalize();
-        let t = 0.5 * (unit.y + 1.0);
-        (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+        sky.sample(ray.direction)
     }
 }
 

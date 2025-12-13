@@ -13,11 +13,13 @@ use crate::hittable::Hittable;
 use crate::lights::LightList;
 use crate::material::Material;
 use crate::plane::Plane;
+use crate::sky::SkyGradient;
 use crate::sphere::Sphere;
 use crate::vec3::{Color, Point3, Vec3};
 pub struct Scene {
     pub camera: CameraDesc,
     pub render: RenderDesc,
+    pub sky: SkyGradient,
     pub world: Arc<dyn Hittable>,
     pub lights: LightList,
 }
@@ -38,6 +40,7 @@ impl Scene {
     pub fn from_scene_file(file: SceneFile) -> Self {
         let camera = file.camera;
         let render = file.render;
+        let sky = file.sky.into_sky();
         let mut spheres: Vec<Sphere> = file
             .objects
             .into_iter()
@@ -80,6 +83,7 @@ impl Scene {
         Self {
             camera,
             render,
+            sky,
             world,
             lights,
         }
@@ -155,6 +159,7 @@ impl Scene {
                 exposure: 1.0,
                 aa: Default::default(),
             },
+            sky: SkyGradient::default(),
             world,
             lights,
         }
@@ -254,5 +259,39 @@ mod tests {
         let modular = Scene::from_file("scenes/cornell-modular.yaml").unwrap();
         assert_eq!(modular.lights.len(), monolithic.lights.len());
         assert_eq!(modular.render.output, "cornell.png");
+    }
+
+    #[test]
+    fn sunset_scene_loads_custom_sky_and_sun_light() {
+        use crate::vec3::Color;
+
+        for path in ["scenes/sunset.ron", "scenes/sunset.json", "scenes/sunset.yaml"] {
+            let scene = Scene::from_file(path).unwrap();
+            assert_eq!(scene.lights.len(), 1, "{path}");
+            assert_eq!(scene.render.output, "sunset.png", "{path}");
+            assert_eq!(
+                scene.sky.horizon,
+                Color::new(1.0, 0.55, 0.32),
+                "{path}"
+            );
+            assert_eq!(
+                scene.sky.zenith,
+                Color::new(0.12, 0.22, 0.55),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn sunset_formats_match_object_count() {
+        use super::load_scene_file;
+
+        let ron = load_scene_file("scenes/sunset.ron").unwrap();
+        let json = load_scene_file("scenes/sunset.json").unwrap();
+        let yaml = load_scene_file("scenes/sunset.yaml").unwrap();
+        assert_eq!(json.objects.len(), ron.objects.len());
+        assert_eq!(yaml.objects.len(), ron.objects.len());
+        assert_eq!(ron.objects.len(), 4);
+        assert_eq!(ron.planes.len(), 1);
     }
 }

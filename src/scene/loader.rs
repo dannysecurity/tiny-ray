@@ -26,6 +26,7 @@ enum ParsedScene {
 struct ResolvedScene {
     camera: Option<super::format::CameraDesc>,
     render: Option<super::format::RenderDesc>,
+    sky: Option<super::format::SkyDesc>,
     objects: Vec<super::format::SphereDesc>,
     planes: Vec<super::format::PlaneDesc>,
 }
@@ -161,6 +162,7 @@ pub fn load_scene_file_with_options(
         include: Vec::new(),
         camera,
         render,
+        sky: resolved.sky.unwrap_or_default(),
         objects: resolved.objects,
         planes: resolved.planes,
     };
@@ -196,16 +198,18 @@ fn load_scene_resolved(
         .into()
     })?;
 
-    let (includes, mut camera, mut render, mut scene_objects, mut scene_planes) = match parsed {
+    let (includes, mut camera, mut render, mut sky, mut scene_objects, mut scene_planes) = match parsed {
         ParsedScene::Root(scene) => (
             scene.include,
             Some(scene.camera),
             Some(scene.render),
+            Some(scene.sky),
             scene.objects,
             scene.planes,
         ),
         ParsedScene::Fragment(fragment) => (
             fragment.include,
+            None,
             None,
             None,
             fragment.objects,
@@ -232,6 +236,9 @@ fn load_scene_resolved(
         if render.is_none() {
             render = fragment.render;
         }
+        if sky.is_none() {
+            sky = fragment.sky;
+        }
     }
 
     merged_objects.append(&mut scene_objects);
@@ -240,6 +247,7 @@ fn load_scene_resolved(
     Ok(ResolvedScene {
         camera,
         render,
+        sky,
         objects: merged_objects,
         planes: merged_planes,
     })

@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::color::GammaEncoding;
 use crate::material::Material;
 use crate::sampling::AntiAliasing;
+pub use crate::sky::SkyDesc;
 use crate::vec3::Color;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -16,6 +17,8 @@ pub struct SceneFile {
     pub include: Vec<String>,
     pub camera: CameraDesc,
     pub render: RenderDesc,
+    #[serde(default)]
+    pub sky: SkyDesc,
     #[serde(default)]
     pub objects: Vec<SphereDesc>,
     #[serde(default)]

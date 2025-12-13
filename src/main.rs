@@ -16,6 +16,7 @@ mod ray;
 mod renderer;
 mod sampling;
 mod scene;
+mod sky;
 mod sphere;
 mod vec3;
 

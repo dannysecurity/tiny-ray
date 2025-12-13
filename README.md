@@ -6,7 +6,7 @@ A minimal path tracer written from scratch in Rust. Renders scenes of spheres wi
 
 - **Primitives** — analytic sphere intersection and infinite planes
 - **Materials** — Lambertian diffuse, fuzzy metal, dielectric (glass), and emissive light sources
-- **Lighting** — emissive spheres act as area lights with next-event estimation (direct light sampling and shadow rays); sky gradient for ambient fill
+- **Lighting** — emissive spheres act as area lights with next-event estimation (direct light sampling and shadow rays); configurable vertical sky gradient for ambient fill
 - **Acceleration** — SAH-style axis split BVH built over scene objects
 - **Scene files** — declarative scene descriptions in RON, JSON, or YAML
 
@@ -142,6 +142,67 @@ Scene excerpt (RON):
 
 Spheres go in `objects`; room walls and floors go in the optional `planes` array. Existing sphere-only scene files are unchanged. The same scene is available as `scenes/cornell.json` and `scenes/cornell.yaml`.
 
+## Example render: sunset patio
+
+The `scenes/sunset.*` files set up an open outdoor scene with a warm horizon-to-zenith sky gradient, a sand-colored ground plane, and three small spheres on the floor — a glass dielectric orb in the center, a gold metal sphere on the left, and a terracotta diffuse sphere on the right. A distant emissive sphere low on the horizon acts as the setting sun; rays that miss geometry pick up the custom sky colors instead of the default pale blue gradient. Depth of field comes from a thin-lens camera (`aperture: 0.03`).
+
+```bash
+cargo run --release -- scenes/sunset.ron
+# writes sunset.png (800×450, 100 spp)
+
+# quick preview while tuning sky colors or sun position
+cargo run --release -- --samples 16 --output sunset-preview.png scenes/sunset.json
+```
+
+Scene excerpt (RON):
+
+```ron
+(
+    camera: (
+        lookfrom: (0.0, 1.1, 5.5),
+        lookat: (0.0, 0.35, 0.0),
+        vfov: 38.0,
+        aperture: 0.03,
+        focus_distance: 5.5,
+    ),
+    render: (
+        width: 800,
+        height: 450,
+        samples_per_pixel: 100,
+        max_depth: 50,
+        output: "sunset.png",
+        gamma: srgb,
+        aa: stratified,
+    ),
+    sky: (
+        horizon: (1.0, 0.55, 0.32),
+        zenith: (0.12, 0.22, 0.55),
+    ),
+    planes: [
+        (
+            point: (0.0, 0.0, 0.0),
+            normal: (0.0, 1.0, 0.0),
+            material: Lambertian(albedo: (0.78, 0.72, 0.62)),
+        ),
+    ],
+    objects: [
+        (
+            center: (10.0, 4.0, -18.0),
+            radius: 2.5,
+            material: Emissive(color: (1.0, 0.72, 0.45), intensity: 6.0),
+        ),
+        (
+            center: (0.0, 0.45, 0.0),
+            radius: 0.45,
+            material: Dielectric(index: 1.5),
+        ),
+        // ... metal and diffuse spheres
+    ],
+)
+```
+
+The optional `sky` block sets `horizon` and `zenith` RGB colors for the background gradient; omit it to keep the default white-to-blue sky used by `demo.*` and other indoor scenes. The same scene is available as `scenes/sunset.json` and `scenes/sunset.yaml`.
+
 ### Modular scenes with `include`
 
 Split large JSON/YAML scenes into reusable fragments and wire them together with an `include` array. Paths are resolved relative to the file that lists them; nested includes and mixed formats (for example, a JSON root including YAML fragments) are supported.
@@ -166,7 +227,7 @@ After parsing, the loader validates scene semantics (positive radii, non-zero pl
 
 ## Scene format
 
-Scenes are loaded by file extension (`.ron`, `.json`, `.yaml`/`.yml`), with content sniffing as a fallback for extensionless files. Override the parser with `--format` when needed. Each file describes the camera, render settings, a list of spheres (`objects`), an optional list of planes (`planes`), and an optional list of fragment paths (`include`). The same schema works across all three formats.
+Scenes are loaded by file extension (`.ron`, `.json`, `.yaml`/`.yml`), with content sniffing as a fallback for extensionless files. Override the parser with `--format` when needed. Each file describes the camera, render settings, an optional sky gradient, a list of spheres (`objects`), an optional list of planes (`planes`), and an optional list of fragment paths (`include`). The same schema works across all three formats.
 
 ### RON example
 
@@ -273,6 +334,22 @@ render: (
 
 The `planes` array is optional and defaults to empty, so existing sphere-only scenes load unchanged.
 
+### Sky gradient
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `horizon` | `(1, 1, 1)` | Background color at the horizon (ray direction y = 0) |
+| `zenith` | `(0.5, 0.7, 1)` | Background color at the zenith (ray direction y = 1) |
+
+Linear interpolation between horizon and zenith is applied based on the y component of the miss ray direction. Indoor scenes can omit the block entirely.
+
+```ron
+sky: (
+    horizon: (1.0, 0.55, 0.32),
+    zenith: (0.12, 0.22, 0.55),
+),
+```
+
 ## Project layout
 
 ```
@@ -287,6 +364,7 @@ src/
   camera.rs     — thin-lens perspective camera
   color.rs      — gamma correction, exposure, and pixel encoding
   sampling.rs   — anti-aliasing sample strategies (random, stratified)
+  sky.rs        — configurable vertical sky gradient for miss rays
   scene/
     format.rs   — serde schema (SceneFile, descriptors)
     loader.rs   — format detection, includes, and parsing
@@ -294,7 +372,7 @@ src/
     mod.rs      — runtime Scene type and world construction
   lights.rs     — emissive sphere lights and direct sampling
   renderer.rs   — Monte Carlo path tracing loop
-scenes/         — example scene files (demo, studio, cornell, modular cornell)
+scenes/         — example scene files (demo, studio, cornell, sunset, modular cornell)
 scenes/fragments/ — reusable geometry fragments for include-based scenes
 ```
 

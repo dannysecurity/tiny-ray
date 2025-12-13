@@ -1,0 +1,48 @@
+camera:
+  lookfrom: [0.0, 1.1, 5.5]
+  lookat: [0.0, 0.35, 0.0]
+  vup: [0.0, 1.0, 0.0]
+  vfov: 38.0
+  aperture: 0.03
+  focus_distance: 5.5
+render:
+  width: 800
+  height: 450
+  samples_per_pixel: 100
+  max_depth: 50
+  output: sunset.png
+  gamma: srgb
+  exposure: 1.0
+  aa: stratified
+sky:
+  horizon: [1.0, 0.55, 0.32]
+  zenith: [0.12, 0.22, 0.55]
+planes:
+  - point: [0.0, 0.0, 0.0]
+    normal: [0.0, 1.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.78, 0.72, 0.62]
+objects:
+  - center: [10.0, 4.0, -18.0]
+    radius: 2.5
+    material:
+      Emissive:
+        color: [1.0, 0.72, 0.45]
+        intensity: 6.0
+  - center: [0.0, 0.45, 0.0]
+    radius: 0.45
+    material:
+      Dielectric:
+        index: 1.5
+  - center: [-1.1, 0.22, 0.4]
+    radius: 0.22
+    material:
+      Metal:
+        albedo: [0.95, 0.78, 0.45]
+        fuzz: 0.015
+  - center: [1.0, 0.22, -0.35]
+    radius: 0.22
+    material:
+      Lambertian:
+        albedo: [0.75, 0.25, 0.18]
