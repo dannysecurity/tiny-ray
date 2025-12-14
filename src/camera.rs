@@ -61,3 +61,79 @@ impl Camera {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    use super::*;
+    use crate::geometry_tests::{assert_close, assert_vec3_close};
+
+    fn test_camera() -> Camera {
+        Camera::new(
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            90.0,
+            1.0,
+            0.0,
+            1.0,
+        )
+    }
+
+    #[test]
+    fn pinhole_rays_share_fixed_origin() {
+        let camera = test_camera();
+        let mut rng = StdRng::seed_from_u64(0);
+        for _ in 0..8 {
+            let ray = camera.get_ray(&mut rng, 0.5, 0.5, 0.0);
+            assert_vec3_close(ray.origin, camera.origin);
+        }
+    }
+
+    #[test]
+    fn pinhole_ray_hits_viewport_corners() {
+        let camera = test_camera();
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let bottom_left = camera.get_ray(&mut rng, 0.0, 0.0, 0.0);
+        assert_vec3_close(bottom_left.direction, Vec3::new(-1.0, -1.0, -1.0));
+
+        let top_right = camera.get_ray(&mut rng, 1.0, 1.0, 0.0);
+        assert_vec3_close(top_right.direction, Vec3::new(1.0, 1.0, -1.0));
+    }
+
+    #[test]
+    fn thin_lens_shifts_ray_origin_when_aperture_open() {
+        let camera = Camera::new(
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            90.0,
+            1.0,
+            0.5,
+            1.0,
+        );
+        assert!(camera.lens_radius > 0.0);
+
+        let mut rng = StdRng::seed_from_u64(7);
+        let mut shifted = false;
+        for _ in 0..32 {
+            let ray = camera.get_ray(&mut rng, 0.5, 0.5, 0.0);
+            if (ray.origin - camera.origin).length() > 1e-6 {
+                shifted = true;
+                break;
+            }
+        }
+        assert!(shifted, "expected lens sampling to offset ray origins");
+    }
+
+    #[test]
+    fn get_ray_preserves_shutter_time() {
+        let camera = test_camera();
+        let mut rng = StdRng::seed_from_u64(0);
+        let ray = camera.get_ray(&mut rng, 0.25, 0.75, 0.42);
+        assert_close(ray.time, 0.42);
+    }
+}
