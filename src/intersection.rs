@@ -38,6 +38,18 @@ pub fn closest_hit_in_objects(
     closest
 }
 
+/// Return true when any object blocks the ray in `[t_min, t_max]`.
+pub fn any_hit_in_objects(
+    objects: &[Arc<dyn Hittable>],
+    ray: &Ray,
+    t_min: f64,
+    t_max: f64,
+) -> bool {
+    objects
+        .iter()
+        .any(|object| object.any_hit(ray, t_min, t_max))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +99,17 @@ mod tests {
         let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
         let hit = closest_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY).unwrap();
         assert_close(hit.t, 4.0);
+    }
+
+    #[test]
+    fn any_hit_in_objects_stops_at_first_blocker() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![
+            Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0)),
+            Arc::new(unit_sphere_at((10.0, 0.0, 0.0), 1.0)),
+        ];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        assert!(any_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY));
+        assert!(!any_hit_in_objects(&objects, &ray, 0.001, 3.5));
     }
 
     #[test]

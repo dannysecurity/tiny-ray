@@ -2,12 +2,13 @@
 
 use std::sync::Arc;
 
+use crate::bvh::BvhNode;
 use crate::geometry_tests::{
     assert_close, assert_length_close, assert_vec3_close, diagonal_plane, floor_plane,
     ray_from, test_material, unit_sphere_at,
 };
 use crate::hittable::{Aabb, Hittable};
-use crate::intersection::closest_hit_in_objects;
+use crate::intersection::{any_hit_in_objects, closest_hit_in_objects};
 use crate::plane::Plane;
 use crate::vec3::{Point3, Vec3};
 
@@ -135,6 +136,54 @@ fn grazing_sphere_hit_has_unit_normal() {
     let hit = sphere.hit(&ray, 0.001, f64::INFINITY).unwrap();
     assert_length_close(hit.normal, 1.0);
     assert_vec3_close(hit.point, Point3::new(0.0, 1.0, 0.0));
+}
+
+#[test]
+fn bvh_hit_matches_brute_force_for_mixed_scene() {
+    let objects = scene(vec![
+        Arc::new(floor_plane()),
+        Arc::new(unit_sphere_at((0.0, 1.0, 0.0), 1.0)),
+        Arc::new(unit_sphere_at((-2.5, 0.5, 0.0), 0.5)),
+        Arc::new(unit_sphere_at((2.5, 0.5, 0.0), 0.5)),
+    ]);
+    let bvh = BvhNode::build(objects.clone());
+
+    let rays = [
+        ray_from((0.0, 5.0, 0.0), (0.0, -1.0, 0.0)),
+        ray_from((0.0, 2.0, 0.0), (1.0, 0.0, 0.0)),
+        ray_from((-5.0, 0.5, 0.0), (1.0, 0.0, 0.0)),
+    ];
+
+    for ray in rays {
+        let expected = closest_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY);
+        let actual = bvh.hit(&ray, 0.001, f64::INFINITY);
+        match (&expected, &actual) {
+            (None, None) => {}
+            (Some(e), Some(a)) => assert_close(a.t, e.t),
+            _ => panic!("BVH hit {:?} != brute force {:?}", actual, expected),
+        }
+    }
+}
+
+#[test]
+fn bvh_any_hit_matches_brute_force_for_mixed_scene() {
+    let objects = scene(vec![
+        Arc::new(floor_plane()),
+        Arc::new(unit_sphere_at((0.0, 1.0, 0.0), 1.0)),
+        Arc::new(unit_sphere_at((6.0, 0.0, 0.0), 1.0)),
+    ]);
+    let bvh = BvhNode::build(objects.clone());
+
+    let rays = [
+        ray_from((0.0, 5.0, 0.0), (0.0, -1.0, 0.0)),
+        ray_from((0.0, 2.0, 0.0), (1.0, 0.0, 0.0)),
+        ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+    ];
+
+    for ray in rays {
+        let expected = any_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY);
+        assert_eq!(bvh.any_hit(&ray, 0.001, f64::INFINITY), expected);
+    }
 }
 
 #[test]

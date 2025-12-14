@@ -16,6 +16,12 @@ pub struct HitRecord {
 pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
     fn bounding_box(&self) -> Aabb;
+
+    /// Return true when any surface blocks the ray in `[t_min, t_max]`.
+    /// BVH nodes override this to exit early without building a full hit record.
+    fn any_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> bool {
+        self.hit(ray, t_min, t_max).is_some()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -44,6 +50,12 @@ impl Aabb {
         } else {
             2
         }
+    }
+
+    /// Surface area of the box faces, used by SAH BVH construction.
+    pub fn surface_area(self) -> f64 {
+        let extent = self.extent();
+        2.0 * (extent.x * extent.y + extent.y * extent.z + extent.z * extent.x)
     }
 
     pub fn hit(&self, ray: &Ray, mut t_min: f64, mut t_max: f64) -> bool {
@@ -111,7 +123,7 @@ pub fn set_face_normal(record: &mut HitRecord, ray: &Ray, outward_normal: Vec3) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry_tests::{assert_vec3_close, ray_from, test_material};
+    use crate::geometry_tests::{assert_close, assert_vec3_close, ray_from, test_material};
 
     fn unit_cube() -> Aabb {
         Aabb::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 1.0, 1.0))
@@ -131,6 +143,12 @@ mod tests {
         assert_eq!(x_long.longest_axis(), 0);
         assert_eq!(y_long.longest_axis(), 1);
         assert_eq!(z_long.longest_axis(), 2);
+    }
+
+    #[test]
+    fn surface_area_sums_opposing_face_pairs() {
+        let bbox = Aabb::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 3.0, 4.0));
+        assert_close(bbox.surface_area(), 52.0);
     }
 
     #[test]

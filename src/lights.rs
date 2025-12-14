@@ -124,8 +124,7 @@ impl LightList {
             ray_time,
         );
         !world
-            .hit(&shadow_ray, 1e-4, sample.distance - 1e-4)
-            .is_some()
+            .any_hit(&shadow_ray, 1e-4, sample.distance - 1e-4)
     }
 
     /// Lambertian direct lighting via uniform light and surface-point sampling.
