@@ -14,6 +14,10 @@ impl Vec3 {
         Self { x, y, z }
     }
 
+    pub const fn from_array([x, y, z]: [f64; 3]) -> Self {
+        Self::new(x, y, z)
+    }
+
     pub fn length_squared(self) -> f64 {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
@@ -211,6 +215,14 @@ mod tests {
 
     use super::*;
     use crate::geometry_tests::{assert_close, assert_length_close, assert_vec3_close};
+
+    #[test]
+    fn from_array_matches_component_constructor() {
+        assert_vec3_close(
+            Vec3::from_array([1.0, 2.0, 3.0]),
+            Vec3::new(1.0, 2.0, 3.0),
+        );
+    }
 
     #[test]
     fn arithmetic_operators_combine_components() {

@@ -11,14 +11,14 @@ use crate::ray::Ray;
 use crate::sampling::pixel_offsets;
 use crate::scene::Scene;
 use crate::sky::SkyGradient;
-use crate::vec3::{Color, Vec3};
+use crate::vec3::{Color, Point3, Vec3};
 
 pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
     let aspect = scene.render.width as f64 / scene.render.height as f64;
     let camera = Camera::new(
-        point(&scene.camera.lookfrom),
-        point(&scene.camera.lookat),
-        vec(&scene.camera.vup),
+        Point3::from_array(scene.camera.lookfrom),
+        Point3::from_array(scene.camera.lookat),
+        Vec3::from_array(scene.camera.vup),
         scene.camera.vfov,
         aspect,
         scene.camera.aperture,
@@ -124,12 +124,4 @@ fn ray_color<R: Rng + ?Sized>(
     } else {
         sky.sample(ray.direction)
     }
-}
-
-fn point(v: &[f64; 3]) -> crate::vec3::Point3 {
-    crate::vec3::Point3::new(v[0], v[1], v[2])
-}
-
-fn vec(v: &[f64; 3]) -> Vec3 {
-    Vec3::new(v[0], v[1], v[2])
 }

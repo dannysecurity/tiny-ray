@@ -1,6 +1,9 @@
+mod build;
 mod format;
 mod loader;
 mod validate;
+
+pub use build::{accelerate_world, BuiltWorld};
 
 pub use format::{CameraDesc, RenderDesc, SceneFile};
 pub use loader::{load_scene_file, load_scene_file_with_format, SceneFormat};
@@ -8,14 +11,12 @@ pub use loader::{load_scene_file, load_scene_file_with_format, SceneFormat};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::bvh::BvhNode;
 use crate::hittable::Hittable;
 use crate::lights::LightList;
 use crate::material::Material;
-use crate::plane::Plane;
 use crate::sky::SkyGradient;
 use crate::sphere::Sphere;
-use crate::vec3::{Color, Point3, Vec3};
+use crate::vec3::{Color, Point3};
 pub struct Scene {
     pub camera: CameraDesc,
     pub render: RenderDesc,
@@ -41,51 +42,13 @@ impl Scene {
         let camera = file.camera;
         let render = file.render;
         let sky = file.sky.into_sky();
-        let mut spheres: Vec<Sphere> = file
-            .objects
-            .into_iter()
-            .map(|s| {
-                Sphere::new(
-                    Point3::new(s.center[0], s.center[1], s.center[2]),
-                    s.radius,
-                    s.material.into_material(),
-                )
-            })
-            .collect();
-
-        let mut objects: Vec<Arc<dyn Hittable>> = file
-            .planes
-            .into_iter()
-            .map(|p| {
-                Arc::new(Plane::new(
-                    Point3::new(p.point[0], p.point[1], p.point[2]),
-                    Vec3::new(p.normal[0], p.normal[1], p.normal[2]),
-                    p.material.into_material(),
-                )) as Arc<dyn Hittable>
-            })
-            .collect();
-
-        let lights = LightList::from_spheres(&spheres);
-        objects.extend(
-            spheres
-                .drain(..)
-                .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>),
-        );
-
-        let world: Arc<dyn Hittable> = if objects.len() > 4 {
-            Arc::new(BvhNode::build(objects))
-        } else if objects.len() == 1 {
-            Arc::clone(&objects[0])
-        } else {
-            Arc::new(BvhNode::build(std::mem::take(&mut objects)))
-        };
-
+        let built = BuiltWorld::from_geometry(file.objects, file.planes);
         Self {
             camera,
             render,
             sky,
-            world,
-            lights,
+            world: built.world,
+            lights: built.lights,
         }
     }
 
@@ -139,7 +102,7 @@ impl Scene {
             .into_iter()
             .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
             .collect();
-        let world = Arc::new(BvhNode::build(objects));
+        let world = accelerate_world(objects);
         Self {
             camera: CameraDesc {
                 lookfrom: [13.0, 2.0, 3.0],

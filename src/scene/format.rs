@@ -8,7 +8,7 @@ use crate::sampling::AntiAliasing;
 pub use crate::sky::SkyDesc;
 use crate::vec3::Color;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct SceneFile {
     /// Paths to fragment scene files, resolved relative to the including file.
     /// Fragments contribute `objects`, `planes`, and nested `include` entries;
@@ -25,7 +25,7 @@ pub struct SceneFile {
     pub planes: Vec<PlaneDesc>,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct CameraDesc {
     pub lookfrom: [f64; 3],
     pub lookat: [f64; 3],
@@ -35,7 +35,7 @@ pub struct CameraDesc {
     pub focus_distance: f64,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct RenderDesc {
     pub width: u32,
     pub height: u32,
@@ -54,14 +54,14 @@ fn default_exposure() -> f64 {
     1.0
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct SphereDesc {
     pub center: [f64; 3],
     pub radius: f64,
     pub material: MaterialDesc,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct PlaneDesc {
     pub point: [f64; 3],
     pub normal: [f64; 3],
@@ -70,7 +70,7 @@ pub struct PlaneDesc {
 
 /// Externally tagged enum: works with RON (`Lambertian(albedo: ...)`), JSON
 /// (`{"Lambertian": {"albedo": [...]}}`), and YAML (`Lambertian: {albedo: [...]}`).
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum MaterialDesc {
     Lambertian { albedo: [f64; 3] },
     Metal { albedo: [f64; 3], fuzz: f64 },
@@ -82,21 +82,17 @@ impl MaterialDesc {
     pub fn into_material(self) -> Arc<Material> {
         Arc::new(match self {
             MaterialDesc::Lambertian { albedo } => Material::Lambertian {
-                albedo: arr3(albedo),
+                albedo: Color::from_array(albedo),
             },
             MaterialDesc::Metal { albedo, fuzz } => Material::Metal {
-                albedo: arr3(albedo),
+                albedo: Color::from_array(albedo),
                 fuzz,
             },
             MaterialDesc::Dielectric { index } => Material::Dielectric { index },
             MaterialDesc::Emissive { color, intensity } => Material::Emissive {
-                color: arr3(color),
+                color: Color::from_array(color),
                 intensity,
             },
         })
     }
-}
-
-fn arr3(v: [f64; 3]) -> Color {
-    Color::new(v[0], v[1], v[2])
 }

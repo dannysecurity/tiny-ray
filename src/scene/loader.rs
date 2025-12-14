@@ -1,3 +1,10 @@
+//! Scene file loading, format detection, and recursive `include` resolution.
+//!
+//! Include resolution walks each file's `include` list depth-first. Geometry from
+//! included fragments is collected before the including file's local `objects` and
+//! `planes`. Optional `camera`, `render`, and `sky` blocks are inherited from the
+//! first fragment that defines them when the current file omits them.
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,6 +36,29 @@ struct ResolvedScene {
     sky: Option<super::format::SkyDesc>,
     objects: Vec<super::format::SphereDesc>,
     planes: Vec<super::format::PlaneDesc>,
+}
+
+impl ResolvedScene {
+    fn inherit_settings_from(&mut self, fragment: &ResolvedScene) {
+        if self.camera.is_none() {
+            self.camera = fragment.camera.clone();
+        }
+        if self.render.is_none() {
+            self.render = fragment.render.clone();
+        }
+        if self.sky.is_none() {
+            self.sky = fragment.sky.clone();
+        }
+    }
+
+    fn prepend_geometry_from(&mut self, fragment: ResolvedScene) {
+        let mut objects = fragment.objects;
+        let mut planes = fragment.planes;
+        objects.append(&mut self.objects);
+        planes.append(&mut self.planes);
+        self.objects = objects;
+        self.planes = planes;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +133,8 @@ impl SceneFormat {
         }
     }
 
+    /// Parse a file as a full scene, or as a geometry-only fragment when required
+    /// fields are absent.
     fn parse_any(self, text: &str) -> Result<ParsedScene, Box<dyn std::error::Error>> {
         if let Ok(root) = self.parse(text) {
             return Ok(ParsedScene::Root(root));
@@ -198,7 +230,7 @@ fn load_scene_resolved(
         .into()
     })?;
 
-    let (includes, mut camera, mut render, mut sky, mut scene_objects, mut scene_planes) = match parsed {
+    let (includes, camera, render, sky, local_objects, local_planes) = match parsed {
         ParsedScene::Root(scene) => (
             scene.include,
             Some(scene.camera),
@@ -218,8 +250,13 @@ fn load_scene_resolved(
     };
 
     let base = path.parent().unwrap_or_else(|| Path::new("."));
-    let mut merged_objects = Vec::new();
-    let mut merged_planes = Vec::new();
+    let mut resolved = ResolvedScene {
+        camera,
+        render,
+        sky,
+        objects: Vec::new(),
+        planes: Vec::new(),
+    };
 
     for rel in includes {
         let rel = rel.trim();
@@ -228,29 +265,14 @@ fn load_scene_resolved(
         }
         let include_path = base.join(rel);
         let fragment = load_scene_resolved(&include_path, options, visited)?;
-        merged_objects.extend(fragment.objects);
-        merged_planes.extend(fragment.planes);
-        if camera.is_none() {
-            camera = fragment.camera;
-        }
-        if render.is_none() {
-            render = fragment.render;
-        }
-        if sky.is_none() {
-            sky = fragment.sky;
-        }
+        resolved.inherit_settings_from(&fragment);
+        resolved.prepend_geometry_from(fragment);
     }
 
-    merged_objects.append(&mut scene_objects);
-    merged_planes.append(&mut scene_planes);
+    resolved.objects.extend(local_objects);
+    resolved.planes.extend(local_planes);
 
-    Ok(ResolvedScene {
-        camera,
-        render,
-        sky,
-        objects: merged_objects,
-        planes: merged_planes,
-    })
+    Ok(resolved)
 }
 
 #[cfg(test)]

@@ -21,8 +21,8 @@ impl Default for SkyDesc {
 impl SkyDesc {
     pub fn into_sky(self) -> SkyGradient {
         SkyGradient {
-            horizon: arr3(self.horizon),
-            zenith: arr3(self.zenith),
+            horizon: Color::from_array(self.horizon),
+            zenith: Color::from_array(self.zenith),
         }
     }
 }
@@ -46,10 +46,6 @@ impl SkyGradient {
         let t = 0.5 * (unit.y + 1.0);
         (1.0 - t) * self.horizon + t * self.zenith
     }
-}
-
-fn arr3(v: [f64; 3]) -> Color {
-    Color::new(v[0], v[1], v[2])
 }
 
 #[cfg(test)]
