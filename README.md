@@ -39,6 +39,68 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
 | `-h`, `--help` | Print usage |
 
+## Example render: starter demo
+
+The `scenes/demo.*` files reproduce the classic “Ray Tracing in One Weekend” layout: three large spheres on a matte gray ground — red and green diffuse balls on the sides, a silver metal sphere on the right, and a glass dielectric orb toward the back. A bright emissive sphere overhead provides area lighting; depth of field comes from a thin-lens camera (`aperture: 0.1`). This is the scene loaded when you run `cargo run --release` with no arguments.
+
+```bash
+cargo run --release -- scenes/demo.ron
+# writes output.png (800×450, 50 spp)
+
+# same layout in JSON or YAML
+cargo run --release -- scenes/demo.json
+cargo run --release -- scenes/demo.yaml
+
+# quick preview while adjusting camera or materials
+cargo run --release -- --samples 8 --output demo-preview.png scenes/demo.ron
+```
+
+Scene excerpt (RON):
+
+```ron
+(
+    camera: (
+        lookfrom: (13.0, 2.0, 3.0),
+        lookat: (0.0, 1.0, 0.0),
+        vfov: 20.0,
+        aperture: 0.1,
+        focus_distance: 10.0,
+    ),
+    render: (
+        width: 800,
+        height: 450,
+        samples_per_pixel: 50,
+        max_depth: 50,
+        output: "output.png",
+    ),
+    objects: [
+        (
+            center: (0.0, 1.0, 0.0),
+            radius: 1.0,
+            material: Lambertian(albedo: (0.8, 0.2, 0.2)),
+        ),
+        (
+            center: (4.0, 1.0, 0.0),
+            radius: 1.0,
+            material: Metal(albedo: (0.8, 0.8, 0.9), fuzz: 0.05),
+        ),
+        (
+            center: (0.0, 1.0, -4.0),
+            radius: 1.0,
+            material: Dielectric(index: 1.5),
+        ),
+        (
+            center: (0.0, 8.0, 0.0),
+            radius: 3.0,
+            material: Emissive(color: (1.0, 0.95, 0.8), intensity: 4.0),
+        ),
+        // ... green diffuse sphere and ground plane
+    ],
+)
+```
+
+The same scene is available as `scenes/demo.json` and `scenes/demo.yaml`.
+
 ## Example render: glass studio
 
 The `scenes/studio.*` files set up a Cornell-box-style room built from large spheres: red and green side walls, a gray floor and back wall, and a small emissive sphere as the ceiling light. Three smaller spheres sit on the floor — a glass dielectric orb in the center, a gold metal sphere on the left, and a blue diffuse sphere on the right. Depth of field comes from a thin-lens camera (`aperture: 0.05`).
