@@ -1,6 +1,7 @@
 use rand::Rng;
 
-use crate::hittable::HitRecord;
+use crate::hittable::{HitRecord, Hittable};
+use crate::lights::LightList;
 use crate::ray::Ray;
 use crate::vec3::{Color, Vec3};
 
@@ -76,6 +77,28 @@ impl Material {
 
     pub fn is_emissive(&self) -> bool {
         matches!(self, Material::Emissive { .. })
+    }
+
+    /// Next-event estimation for materials that support direct area-light sampling.
+    pub fn sample_direct<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        lights: &LightList,
+        world: &dyn Hittable,
+        hit: &HitRecord,
+        ray_time: f64,
+    ) -> Color {
+        match self {
+            Material::Lambertian { albedo } => lights.sample_direct(
+                rng,
+                world,
+                hit.point,
+                hit.normal,
+                *albedo,
+                ray_time,
+            ),
+            _ => Color::default(),
+        }
     }
 
     fn reflectance(cosine: f64, ref_idx: f64) -> f64 {
