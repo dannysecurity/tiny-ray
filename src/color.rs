@@ -57,13 +57,15 @@ impl ColorPipeline {
 }
 
 fn encode_channel(linear: f64, gamma: GammaEncoding) -> u8 {
-    let clamped = linear.clamp(0.0, 0.999);
+    let linear = linear.max(0.0);
     let encoded = match gamma {
-        GammaEncoding::Gamma2 => clamped.sqrt(),
-        GammaEncoding::Srgb => linear_to_srgb(clamped),
-        GammaEncoding::Linear => clamped,
+        GammaEncoding::Gamma2 => linear.sqrt(),
+        GammaEncoding::Srgb => linear_to_srgb(linear),
+        GammaEncoding::Linear => linear,
     };
-    (256.0 * encoded).floor() as u8
+    (encoded.clamp(0.0, 1.0) * 255.0)
+        .clamp(0.0, 255.0)
+        .round() as u8
 }
 
 /// Convert a linear light intensity in [0, 1] to sRGB display space.
@@ -130,5 +132,17 @@ mod tests {
         };
         let pixel = pipeline.encode_pixel(Color::new(2.0, -1.0, 0.5));
         assert_eq!(pixel.0, [255, 0, 128]);
+    }
+
+    #[test]
+    fn unit_linear_white_reaches_byte_255() {
+        for gamma in [GammaEncoding::Gamma2, GammaEncoding::Srgb, GammaEncoding::Linear] {
+            let pipeline = ColorPipeline {
+                gamma,
+                exposure: 1.0,
+            };
+            let pixel = pipeline.encode_pixel(Color::new(1.0, 1.0, 1.0));
+            assert_eq!(pixel.0, [255, 255, 255], "gamma {:?}", gamma);
+        }
     }
 }
