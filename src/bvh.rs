@@ -361,6 +361,17 @@ mod tests {
     }
 
     #[test]
+    fn bvh_any_hit_honors_t_max_interval() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![make_sphere((0.0, 0.0, 0.0), 1.0)];
+        let bvh = BvhNode::build(objects);
+
+        let ray = Ray::new(Point3::new(-10.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), 0.0);
+
+        assert!(!bvh.any_hit(&ray, 0.001, 5.0));
+        assert!(bvh.any_hit(&ray, 0.001, 10.0));
+    }
+
+    #[test]
     fn bvh_root_bounding_box_encloses_all_objects() {
         let objects: Vec<Arc<dyn Hittable>> = vec![
             make_sphere((-2.0, 0.0, 0.0), 1.0),
