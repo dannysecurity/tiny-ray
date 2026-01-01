@@ -5,8 +5,8 @@ A minimal path tracer written from scratch in Rust. Renders scenes of spheres wi
 ## Features
 
 - **Primitives** — analytic sphere intersection and infinite planes
-- **Materials** — Lambertian diffuse, fuzzy metal, dielectric (glass), and emissive light sources
-- **Lighting** — emissive spheres act as area lights with next-event estimation (direct light sampling and shadow rays); configurable vertical sky gradient for ambient fill
+- **Materials** — Lambertian diffuse, fuzzy metal, dielectric (glass), and emissive light sources; metal surfaces use specular next-event estimation for direct highlights
+- **Lighting** — emissive spheres act as area lights with next-event estimation (direct diffuse and specular sampling plus shadow rays); configurable vertical sky gradient for ambient fill
 - **Acceleration** — SAH-style axis split BVH built over scene objects
 - **Scene files** — declarative scene descriptions in RON, JSON, or YAML
 
@@ -386,7 +386,7 @@ render: (
 | Variant | Fields | Description |
 |---------|--------|-------------|
 | `Lambertian` | `albedo: (r, g, b)` | Matte diffuse surface |
-| `Metal` | `albedo`, `fuzz` | Reflective metal with optional roughness |
+| `Metal` | `albedo`, `fuzz` | Reflective metal with optional roughness; direct specular highlights from emissive lights |
 | `Dielectric` | `index` | Glass / water with index of refraction |
 | `Emissive` | `color`, `intensity` | Self-illuminating light source |
 

@@ -32,6 +32,29 @@ impl EmissiveSphere {
         4.0 * PI * self.radius * self.radius
     }
 
+    /// Closest forward hit of `ray` against this sphere, if any.
+    pub fn intersect(&self, ray: &Ray, t_min: f64, t_max: f64) -> Option<(Point3, f64)> {
+        let oc = ray.origin - self.center;
+        let a = ray.direction.length_squared();
+        let half_b = oc.dot(ray.direction);
+        let c = oc.length_squared() - self.radius * self.radius;
+        let discriminant = half_b * half_b - a * c;
+        if discriminant < 0.0 {
+            return None;
+        }
+
+        let sqrt_d = discriminant.sqrt();
+        let mut root = (-half_b - sqrt_d) / a;
+        if root < t_min || t_max < root {
+            root = (-half_b + sqrt_d) / a;
+            if root < t_min || t_max < root {
+                return None;
+            }
+        }
+
+        Some((ray.at(root), root))
+    }
+
     /// Uniformly sample a point on the sphere surface.
     pub fn sample_surface<R: Rng + ?Sized>(&self, rng: &mut R) -> (Point3, Vec3) {
         let outward = Vec3::random_unit_vector(rng);
@@ -158,6 +181,61 @@ impl LightList {
 
         let light_pdf = sample.pdf * self.lights.len() as f64;
         sample.radiance * (albedo / PI) * cos_theta / light_pdf
+    }
+
+    /// Perfect or fuzzy mirror direct lighting via next-event estimation.
+    ///
+    /// Traces the mirror reflection of the incoming ray and tests whether it
+    /// intersects a randomly chosen emissive sphere without occlusion.
+    pub fn sample_direct_specular<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        world: &dyn Hittable,
+        shading_point: Point3,
+        shading_normal: Vec3,
+        view_direction: Vec3,
+        albedo: Color,
+        fuzz: f64,
+        ray_time: f64,
+    ) -> Color {
+        if self.lights.is_empty() {
+            return Color::default();
+        }
+
+        let index = rng.gen_range(0..self.lights.len());
+        let light = &self.lights[index];
+
+        let mut reflect_dir = view_direction.normalize().reflect(shading_normal);
+        if fuzz > 0.0 {
+            reflect_dir = (reflect_dir + fuzz * Vec3::random_in_unit_sphere(rng)).normalize();
+        }
+        if reflect_dir.dot(shading_normal) <= 0.0 {
+            return Color::default();
+        }
+
+        let reflect_ray = Ray::new(
+            shading_point + shading_normal * 1e-4,
+            reflect_dir,
+            ray_time,
+        );
+        let Some((light_point, distance)) = light.intersect(&reflect_ray, 1e-4, f64::INFINITY)
+        else {
+            return Color::default();
+        };
+
+        let direction = (light_point - shading_point) / distance;
+        let sample = LightSample {
+            point: light_point,
+            direction,
+            distance,
+            radiance: light.radiance,
+            pdf: 1.0,
+        };
+        if !Self::is_visible(world, shading_point, &sample, ray_time) {
+            return Color::default();
+        }
+
+        light.radiance * albedo * self.lights.len() as f64
     }
 }
 
@@ -299,5 +377,75 @@ mod tests {
         };
 
         assert!(LightList::is_visible(&occluder, shading_point, &sample, 0.0));
+    }
+
+    #[test]
+    fn specular_direct_accepts_reflected_ray_hitting_light() {
+        let light = EmissiveSphere {
+            center: Point3::new(0.0, 10.0, 0.0),
+            radius: 1.0,
+            radiance: Color::new(5.0, 5.0, 5.0),
+        };
+        let lights = LightList {
+            lights: vec![light],
+        };
+        let shading_point = Point3::new(0.0, 0.0, 0.0);
+        let shading_normal = Vec3::new(0.0, 1.0, 0.0);
+        let view_direction = Vec3::new(0.0, -1.0, 0.0);
+        let albedo = Color::new(0.8, 0.8, 0.8);
+        let mut rng = StdRng::seed_from_u64(11);
+
+        let color = lights.sample_direct_specular(
+            &mut rng,
+            &Sphere::new(
+                Point3::new(100.0, 100.0, 100.0),
+                1.0,
+                Arc::new(Material::Lambertian {
+                    albedo: Color::default(),
+                }),
+            ),
+            shading_point,
+            shading_normal,
+            view_direction,
+            albedo,
+            0.0,
+            0.0,
+        );
+        assert!(color.x > 0.0);
+    }
+
+    #[test]
+    fn specular_direct_rejects_reflection_missing_light() {
+        let light = EmissiveSphere {
+            center: Point3::new(10.0, 0.0, 0.0),
+            radius: 1.0,
+            radiance: Color::new(5.0, 5.0, 5.0),
+        };
+        let lights = LightList {
+            lights: vec![light],
+        };
+        let shading_point = Point3::new(0.0, 0.0, 0.0);
+        let shading_normal = Vec3::new(0.0, 1.0, 0.0);
+        let view_direction = Vec3::new(0.0, -1.0, 0.0);
+        let albedo = Color::new(0.8, 0.8, 0.8);
+        let mut rng = StdRng::seed_from_u64(12);
+
+        let color = lights.sample_direct_specular(
+            &mut rng,
+            &Sphere::new(
+                Point3::new(100.0, 100.0, 100.0),
+                1.0,
+                Arc::new(Material::Lambertian {
+                    albedo: Color::default(),
+                }),
+            ),
+            shading_point,
+            shading_normal,
+            view_direction,
+            albedo,
+            0.0,
+            0.0,
+        );
+        assert_eq!(color, Color::default());
     }
 }

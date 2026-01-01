@@ -86,6 +86,7 @@ impl Material {
         lights: &LightList,
         world: &dyn Hittable,
         hit: &HitRecord,
+        incoming_direction: Vec3,
         ray_time: f64,
     ) -> Color {
         match self {
@@ -97,6 +98,16 @@ impl Material {
                 *albedo,
                 ray_time,
             ),
+            Material::Metal { albedo, fuzz } => lights.sample_direct_specular(
+                rng,
+                world,
+                hit.point,
+                hit.normal,
+                incoming_direction,
+                *albedo,
+                *fuzz,
+                ray_time,
+            ),
             _ => Color::default(),
         }
     }
@@ -104,5 +115,127 @@ impl Material {
     fn reflectance(cosine: f64, ref_idx: f64) -> f64 {
         let r0 = ((1.0 - ref_idx) / (1.0 + ref_idx)).powi(2);
         r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    use super::*;
+    use crate::geometry_tests::ray_from;
+    use crate::hittable::HitRecord;
+    use crate::sphere::Sphere;
+    use crate::vec3::Point3;
+
+    fn hit_on_y_up_normal() -> HitRecord {
+        HitRecord {
+            point: Point3::new(0.0, 0.0, 0.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
+            t: 1.0,
+            front_face: true,
+            material: Arc::new(Material::Metal {
+                albedo: Color::new(0.8, 0.8, 0.8),
+                fuzz: 0.0,
+            }),
+        }
+    }
+
+    #[test]
+    fn lambertian_sample_direct_delegates_to_light_list() {
+        let material = Material::Lambertian {
+            albedo: Color::new(0.5, 0.5, 0.5),
+        };
+        let hit = HitRecord {
+            point: Point3::new(0.0, 0.0, 0.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
+            t: 1.0,
+            front_face: true,
+            material: Arc::new(material.clone()),
+        };
+        let lights = LightList::new();
+        let world = Sphere::new(
+            Point3::new(100.0, 100.0, 100.0),
+            1.0,
+            Arc::new(Material::Lambertian {
+                albedo: Color::default(),
+            }),
+        );
+        let mut rng = StdRng::seed_from_u64(1);
+
+        let color = material.sample_direct(
+            &mut rng,
+            &lights,
+            &world,
+            &hit,
+            Vec3::new(0.0, -1.0, 0.0),
+            0.0,
+        );
+        assert_eq!(color, Color::default());
+    }
+
+    #[test]
+    fn metal_sample_direct_uses_incoming_direction() {
+        let material = Material::Metal {
+            albedo: Color::new(0.9, 0.9, 0.9),
+            fuzz: 0.0,
+        };
+        let hit = hit_on_y_up_normal();
+        let light_sphere = Sphere::new(
+            Point3::new(0.0, 10.0, 0.0),
+            1.0,
+            Arc::new(Material::Emissive {
+                color: Color::new(1.0, 1.0, 1.0),
+                intensity: 5.0,
+            }),
+        );
+        let lights = LightList::from_spheres(&[light_sphere]);
+        let world = Sphere::new(
+            Point3::new(100.0, 100.0, 100.0),
+            1.0,
+            Arc::new(Material::Lambertian {
+                albedo: Color::default(),
+            }),
+        );
+        let mut rng = StdRng::seed_from_u64(2);
+        let ray = ray_from((0.0, 1.0, 0.0), (0.0, -1.0, 0.0));
+
+        let color = material.sample_direct(
+            &mut rng,
+            &lights,
+            &world,
+            &hit,
+            ray.direction,
+            0.0,
+        );
+        assert!(color.x > 0.0 || color.y > 0.0 || color.z > 0.0);
+    }
+
+    #[test]
+    fn dielectric_sample_direct_returns_black() {
+        let material = Material::Dielectric { index: 1.5 };
+        let hit = hit_on_y_up_normal();
+        let lights = LightList::new();
+        let world = Sphere::new(
+            Point3::new(100.0, 100.0, 100.0),
+            1.0,
+            Arc::new(Material::Lambertian {
+                albedo: Color::default(),
+            }),
+        );
+        let mut rng = StdRng::seed_from_u64(3);
+
+        let color = material.sample_direct(
+            &mut rng,
+            &lights,
+            &world,
+            &hit,
+            Vec3::new(0.0, -1.0, 0.0),
+            0.0,
+        );
+        assert_eq!(color, Color::default());
     }
 }

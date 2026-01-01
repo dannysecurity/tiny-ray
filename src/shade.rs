@@ -55,6 +55,7 @@ impl<'a> PathTracer<'a> {
             self.lights,
             self.world,
             hit,
+            ray.direction,
             ray.time,
         );
 
@@ -197,5 +198,33 @@ mod tests {
 
         let color = tracer_for(&sphere, &lights, &sky).trace_ray(&mut rng, &ray, 1);
         assert_eq!(color, Color::default());
+    }
+
+    #[test]
+    fn metal_hit_with_visible_light_adds_direct_contribution() {
+        let metal = Sphere::new(
+            Point3::new(0.0, 0.0, -2.0),
+            1.0,
+            Arc::new(Material::Metal {
+                albedo: Color::new(0.9, 0.9, 0.9),
+                fuzz: 0.0,
+            }),
+        );
+        let light_sphere = Sphere::new(
+            Point3::new(0.0, 10.0, -2.0),
+            2.0,
+            Arc::new(Material::Emissive {
+                color: Color::new(1.0, 1.0, 1.0),
+                intensity: 10.0,
+            }),
+        );
+        let lights = LightList::from_spheres(&[light_sphere]);
+        let world = crate::bvh::BvhNode::build(vec![Arc::new(metal) as Arc<dyn Hittable>]);
+        let sky = SkyGradient::default();
+        let mut rng = StdRng::seed_from_u64(6);
+        let ray = ray_from((0.0, 1.0, 0.0), (0.0, -1.0, 0.0));
+
+        let color = tracer_for(&world, &lights, &sky).trace_ray(&mut rng, &ray, 1);
+        assert!(color.x > 0.0 || color.y > 0.0 || color.z > 0.0);
     }
 }
