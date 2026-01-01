@@ -22,7 +22,7 @@ impl Plane {
         }
     }
 
-    /// Thin axis-aligned slab large enough for indoor scenes and BVH bounds.
+    /// Placeholder bounds for diagnostics; infinite planes are not BVH-culled via this box.
     fn thin_slab_bounds(&self) -> Aabb {
         let extent = 1000.0;
         let thickness = 0.001;

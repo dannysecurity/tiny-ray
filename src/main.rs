@@ -21,6 +21,7 @@ mod shade;
 mod sky;
 mod sphere;
 mod vec3;
+mod world;
 
 pub use scene::Scene;
 

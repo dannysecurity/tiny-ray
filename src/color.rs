@@ -39,6 +39,7 @@ impl Default for ColorPipeline {
 
 impl ColorPipeline {
     pub fn apply_exposure(&self, color: Color) -> Color {
+        let color = sanitize_color(color);
         Color::new(
             color.x * self.exposure,
             color.y * self.exposure,
@@ -53,6 +54,23 @@ impl ColorPipeline {
             encode_channel(exposed.y, self.gamma),
             encode_channel(exposed.z, self.gamma),
         ])
+    }
+}
+
+/// Clamp negative values and replace NaN/Inf with black so bad paths do not poison PNG output.
+pub fn sanitize_color(color: Color) -> Color {
+    Color::new(
+        sanitize_component(color.x),
+        sanitize_component(color.y),
+        sanitize_component(color.z),
+    )
+}
+
+fn sanitize_component(value: f64) -> f64 {
+    if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
     }
 }
 
@@ -144,5 +162,21 @@ mod tests {
             let pixel = pipeline.encode_pixel(Color::new(1.0, 1.0, 1.0));
             assert_eq!(pixel.0, [255, 255, 255], "gamma {:?}", gamma);
         }
+    }
+
+    #[test]
+    fn sanitize_color_maps_non_finite_to_black() {
+        let cleaned = sanitize_color(Color::new(f64::NAN, f64::INFINITY, -1.0));
+        assert_eq!(cleaned, Color::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn encode_pixel_recovers_from_non_finite_radiance() {
+        let pipeline = ColorPipeline {
+            gamma: GammaEncoding::Linear,
+            exposure: 1.0,
+        };
+        let pixel = pipeline.encode_pixel(Color::new(f64::NAN, 0.5, f64::INFINITY));
+        assert_eq!(pixel.0, [0, 128, 0]);
     }
 }

@@ -96,12 +96,22 @@ fn ray_axis_bounds(ray: &Ray, bbox: &Aabb, axis: usize) -> (f64, f64, f64, f64) 
     )
 }
 
+/// Rays nearly parallel to a slab face must not divide by a vanishing direction.
+const RAY_DIRECTION_EPSILON: f64 = 1e-8;
+
 fn slab_interval(
     origin: f64,
     direction: f64,
     axis_min: f64,
     axis_max: f64,
 ) -> (f64, f64) {
+    if direction.abs() < RAY_DIRECTION_EPSILON {
+        if origin < axis_min || origin > axis_max {
+            return (f64::INFINITY, f64::NEG_INFINITY);
+        }
+        return (f64::NEG_INFINITY, f64::INFINITY);
+    }
+
     let inv_direction = 1.0 / direction;
     let mut t_near = (axis_min - origin) * inv_direction;
     let mut t_far = (axis_max - origin) * inv_direction;
@@ -187,6 +197,20 @@ mod tests {
         let ray = ray_from((0.0, 0.0, -5.0), (0.0, 0.0, 1.0));
         assert!(!bbox.hit(&ray, 0.001, 3.0));
         assert!(bbox.hit(&ray, 0.001, 5.0));
+    }
+
+    #[test]
+    fn aabb_hit_accepts_ray_inside_box_with_near_zero_direction() {
+        let bbox = unit_cube();
+        let ray = ray_from((0.0, 0.0, 0.0), (1e-12, 0.0, 1.0));
+        assert!(bbox.hit(&ray, 0.001, f64::INFINITY));
+    }
+
+    #[test]
+    fn aabb_hit_rejects_ray_outside_box_with_near_zero_direction() {
+        let bbox = unit_cube();
+        let ray = ray_from((5.0, 0.0, 0.0), (1e-12, 0.0, 1.0));
+        assert!(!bbox.hit(&ray, 0.001, f64::INFINITY));
     }
 
     #[test]

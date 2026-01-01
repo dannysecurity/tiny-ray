@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use crate::bvh::BvhNode;
 use crate::hittable::Hittable;
 use crate::lights::LightList;
 use crate::plane::Plane;
 use crate::sphere::Sphere;
 use crate::vec3::{Point3, Vec3};
+use crate::world::SceneWorld;
 
 use super::format::{PlaneDesc, SphereDesc};
 
@@ -24,14 +24,13 @@ impl BuiltWorld {
     ) -> Self {
         let spheres = build_spheres(objects);
         let lights = LightList::from_spheres(&spheres);
-        let mut hittables = build_planes(planes);
-        hittables.extend(
-            spheres
-                .into_iter()
-                .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>),
-        );
+        let infinite_planes = build_planes(planes);
+        let bounded = spheres
+            .into_iter()
+            .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
+            .collect();
         Self {
-            world: accelerate_world(hittables),
+            world: SceneWorld::assemble(bounded, infinite_planes),
             lights,
         }
     }
@@ -63,13 +62,9 @@ fn build_planes(descriptors: Vec<PlaneDesc>) -> Vec<Arc<dyn Hittable>> {
         .collect()
 }
 
-/// Return a single primitive directly; otherwise wrap the set in a BVH.
+/// Accelerate a bounded object list (spheres only — planes use [`SceneWorld`]).
 pub fn accelerate_world(objects: Vec<Arc<dyn Hittable>>) -> Arc<dyn Hittable> {
-    match objects.as_slice() {
-        [] => panic!("scene must contain at least one object or plane"),
-        [sole] => Arc::clone(sole),
-        _ => Arc::new(BvhNode::build(objects)),
-    }
+    SceneWorld::assemble(objects, vec![])
 }
 
 #[cfg(test)]
