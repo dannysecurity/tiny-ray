@@ -4,6 +4,7 @@ use rand::{Rng, SeedableRng};
 
 use crate::camera::Camera;
 use crate::color::ColorPipeline;
+use crate::film::{accumulate_weighted, PixelFilter};
 use crate::sampling::{pixel_offsets, AntiAliasing};
 use crate::scene::Scene;
 use crate::shade::PathTracer;
@@ -19,6 +20,7 @@ struct RenderContext<'a> {
     samples_per_pixel: u32,
     max_depth: u32,
     aa: AntiAliasing,
+    filter: PixelFilter,
 }
 
 impl<'a> RenderContext<'a> {
@@ -30,6 +32,7 @@ impl<'a> RenderContext<'a> {
             samples_per_pixel: scene.render.samples_per_pixel,
             max_depth: scene.render.max_depth,
             aa: scene.render.aa,
+            filter: scene.render.filter,
             camera: Camera::new(
                 Point3::from_array(scene.camera.lookfrom),
                 Point3::from_array(scene.camera.lookat),
@@ -53,27 +56,29 @@ impl<'a> RenderContext<'a> {
 
     fn log_banner(&self) {
         eprintln!(
-            "Rendering {}x{} ({} spp, depth {}, gamma {:?}, aa {:?})",
+            "Rendering {}x{} ({} spp, depth {}, gamma {:?}, aa {:?}, filter {:?})",
             self.width,
             self.height,
             self.samples_per_pixel,
             self.max_depth,
             self.pipeline.gamma,
             self.aa,
+            self.filter,
         );
     }
 
     fn trace_pixel<R: Rng + ?Sized>(&self, rng: &mut R, x: u32, y: u32) -> Color {
-        let mut pixel = Color::default();
-        for sample in 0..self.samples_per_pixel {
+        let samples = (0..self.samples_per_pixel).map(|sample| {
             let (du, dv) = pixel_offsets(sample, self.samples_per_pixel, self.aa, rng);
             let u = (x as f64 + du) / (self.width - 1) as f64;
             let v = ((self.height - 1 - y) as f64 + dv) / (self.height - 1) as f64;
             let time = rng.gen();
             let ray = self.camera.get_ray(rng, u, v, time);
-            pixel += self.tracer.trace_ray(rng, &ray, self.max_depth);
-        }
-        pixel / self.samples_per_pixel as f64
+            let radiance = self.tracer.trace_ray(rng, &ray, self.max_depth);
+            let weight = self.filter.weight(du - 0.5, dv - 0.5);
+            (radiance, weight)
+        });
+        accumulate_weighted(samples)
     }
 }
 

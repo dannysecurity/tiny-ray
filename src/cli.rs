@@ -4,6 +4,7 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::color::GammaEncoding;
+use crate::film::PixelFilter;
 use crate::sampling::AntiAliasing;
 use crate::scene::{Scene, SceneFormat};
 
@@ -23,13 +24,14 @@ Options:
       --gamma MODE      Override output gamma: gamma2, srgb, or linear
       --exposure F      Override linear exposure multiplier (default 1.0)
       --aa MODE         Override anti-aliasing: random, stratified, or halton
+      --filter MODE     Override pixel reconstruction filter: box, gaussian, or mitchell
   -h, --help            Show this help message
 
 Examples:
   cargo run --release -- scenes/studio.ron
   cargo run --release -- --samples 10 --output preview.png scenes/studio.json
   cargo run --release -- --format yaml scenes/cornell-modular.yaml
-  cargo run --release -- --gamma srgb --aa stratified scenes/studio.ron
+  cargo run --release -- --gamma srgb --aa stratified --filter mitchell scenes/studio.ron
 ";
 
 #[derive(Debug, Default, PartialEq)]
@@ -41,6 +43,7 @@ pub struct CliOptions {
     pub gamma: Option<GammaEncoding>,
     pub exposure: Option<f64>,
     pub aa: Option<AntiAliasing>,
+    pub filter: Option<PixelFilter>,
 }
 
 impl CliOptions {
@@ -61,6 +64,7 @@ impl CliOptions {
         let mut gamma = None;
         let mut exposure = None;
         let mut aa = None;
+        let mut filter = None;
 
         while let Some(arg) = args.next() {
             let arg = arg.as_ref();
@@ -100,6 +104,9 @@ impl CliOptions {
                 "--aa" => {
                     aa = Some(parse_aa(&next_value(&mut args, arg)?)?);
                 }
+                "--filter" => {
+                    filter = Some(parse_filter(&next_value(&mut args, arg)?)?);
+                }
                 value if value.starts_with('-') => {
                     return Err(format!("unknown option: {value}"));
                 }
@@ -120,6 +127,7 @@ impl CliOptions {
             gamma,
             exposure,
             aa,
+            filter,
         })
     }
 
@@ -140,6 +148,9 @@ impl CliOptions {
         if let Some(aa) = self.aa {
             scene.render.aa = aa;
         }
+        if let Some(filter) = self.filter {
+            scene.render.filter = filter;
+        }
     }
 }
 
@@ -150,6 +161,17 @@ fn parse_gamma(value: &str) -> Result<GammaEncoding, String> {
         "linear" => Ok(GammaEncoding::Linear),
         _ => Err(format!(
             "invalid gamma mode: {value} (expected gamma2, srgb, or linear)"
+        )),
+    }
+}
+
+fn parse_filter(value: &str) -> Result<PixelFilter, String> {
+    match value {
+        "box" => Ok(PixelFilter::Box),
+        "gaussian" => Ok(PixelFilter::Gaussian),
+        "mitchell" => Ok(PixelFilter::Mitchell),
+        _ => Err(format!(
+            "invalid filter mode: {value} (expected box, gaussian, or mitchell)"
         )),
     }
 }
@@ -188,6 +210,7 @@ mod tests {
         assert_eq!(options.gamma, None);
         assert_eq!(options.exposure, None);
         assert_eq!(options.aa, None);
+        assert_eq!(options.filter, None);
         assert_eq!(options.format, None);
     }
 
@@ -217,6 +240,18 @@ mod tests {
         assert_eq!(options.gamma, Some(GammaEncoding::Srgb));
         assert_eq!(options.exposure, Some(1.5));
         assert_eq!(options.aa, Some(AntiAliasing::Stratified));
+    }
+
+    #[test]
+    fn parse_args_accepts_filter_override() {
+        let options =
+            CliOptions::parse_from(["--filter", "mitchell", "scenes/demo.ron"]).unwrap();
+        assert_eq!(options.filter, Some(PixelFilter::Mitchell));
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_filter() {
+        assert!(CliOptions::parse_from(["--filter", "lanczos"]).is_err());
     }
 
     #[test]
@@ -261,6 +296,7 @@ mod tests {
             gamma: Some(GammaEncoding::Srgb),
             exposure: Some(0.8),
             aa: Some(AntiAliasing::Stratified),
+            filter: Some(PixelFilter::Gaussian),
         };
         options.apply_to_scene(&mut scene);
         assert_eq!(scene.render.output, "override.png");
@@ -268,5 +304,6 @@ mod tests {
         assert_eq!(scene.render.gamma, GammaEncoding::Srgb);
         assert_eq!(scene.render.exposure, 0.8);
         assert_eq!(scene.render.aa, AntiAliasing::Stratified);
+        assert_eq!(scene.render.filter, PixelFilter::Gaussian);
     }
 }

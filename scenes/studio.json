@@ -15,7 +15,8 @@
     "output": "studio.png",
     "gamma": "srgb",
     "exposure": 1.0,
-    "aa": "stratified"
+    "aa": "stratified",
+    "filter": "mitchell"
   },
   "objects": [
     {

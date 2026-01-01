@@ -139,6 +139,7 @@ mod tests {
                 gamma: Default::default(),
                 exposure: 1.0,
                 aa: Default::default(),
+                filter: Default::default(),
             },
             sky: Default::default(),
             objects: vec![SphereDesc {

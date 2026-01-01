@@ -16,6 +16,7 @@
         gamma: srgb,
         exposure: 1.0,
         aa: stratified,
+        filter: mitchell,
     ),
     objects: [
         (

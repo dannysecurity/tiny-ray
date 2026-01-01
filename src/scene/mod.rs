@@ -121,6 +121,7 @@ impl Scene {
                 gamma: Default::default(),
                 exposure: 1.0,
                 aa: Default::default(),
+                filter: Default::default(),
             },
             sky: SkyGradient::default(),
             world,
@@ -164,6 +165,11 @@ mod tests {
             assert_eq!(
                 scene.render.aa,
                 crate::sampling::AntiAliasing::Stratified,
+                "{path}"
+            );
+            assert_eq!(
+                scene.render.filter,
+                crate::film::PixelFilter::Mitchell,
                 "{path}"
             );
         }

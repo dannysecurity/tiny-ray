@@ -279,6 +279,7 @@ fn load_scene_resolved(
 mod tests {
     use super::*;
     use crate::color::GammaEncoding;
+    use crate::film::PixelFilter;
     use crate::sampling::AntiAliasing;
 
     const MINIMAL_JSON: &str = r#"{
@@ -437,6 +438,7 @@ objects:
         assert_eq!(scene.render.gamma, GammaEncoding::Gamma2);
         assert_eq!(scene.render.exposure, 1.0);
         assert_eq!(scene.render.aa, AntiAliasing::Random);
+        assert_eq!(scene.render.filter, PixelFilter::Box);
     }
 
     #[test]
@@ -458,7 +460,8 @@ objects:
                 "output": "tonemapped.png",
                 "gamma": "srgb",
                 "exposure": 1.25,
-                "aa": "stratified"
+                "aa": "stratified",
+                "filter": "gaussian"
             },
             "objects": []
         }"#;
@@ -466,6 +469,7 @@ objects:
         assert_eq!(scene.render.gamma, GammaEncoding::Srgb);
         assert_eq!(scene.render.exposure, 1.25);
         assert_eq!(scene.render.aa, AntiAliasing::Stratified);
+        assert_eq!(scene.render.filter, PixelFilter::Gaussian);
     }
 
     #[test]
@@ -502,6 +506,8 @@ objects:
         assert_eq!(yaml.render.gamma, ron.render.gamma);
         assert_eq!(json.render.aa, AntiAliasing::Stratified);
         assert_eq!(yaml.render.aa, ron.render.aa);
+        assert_eq!(json.render.filter, PixelFilter::Mitchell);
+        assert_eq!(yaml.render.filter, ron.render.filter);
     }
 
     #[test]

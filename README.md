@@ -37,6 +37,7 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--gamma MODE` | Output encoding: `gamma2` (default), `srgb`, or `linear` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
+| `--filter MODE` | Pixel reconstruction filter: `box` (default), `gaussian`, or `mitchell` |
 | `-h`, `--help` | Print usage |
 
 ## Example render: starter demo
@@ -362,8 +363,9 @@ Materials use an externally tagged enum in JSON and YAML (`"Lambertian": { "albe
 | `gamma` | `gamma2` | Output encoding: `gamma2`, `srgb`, or `linear` |
 | `exposure` | `1.0` | Linear exposure multiplier before gamma encoding |
 | `aa` | `random` | Sub-pixel sampling: `random`, `stratified`, or `halton` |
+| `filter` | `box` | Pixel reconstruction filter: `box`, `gaussian`, or `mitchell` |
 
-Tracing accumulates linear radiance; the color pipeline applies exposure and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing. For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
+Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
 
 ```ron
 render: (
@@ -375,6 +377,7 @@ render: (
     gamma: srgb,
     exposure: 1.0,
     aa: stratified,
+    filter: mitchell,
 ),
 ```
 
@@ -425,7 +428,8 @@ src/
   bvh.rs        — bounding volume hierarchy
   camera.rs     — thin-lens perspective camera
   color.rs      — gamma correction, exposure, and pixel encoding
-  sampling.rs   — anti-aliasing sample strategies (random, stratified)
+  sampling.rs   — anti-aliasing sample strategies (random, stratified, halton)
+  film.rs       — pixel reconstruction filters (box, Gaussian, Mitchell)
   sky.rs        — configurable vertical sky gradient for miss rays
   scene/
     format.rs   — serde schema (SceneFile, descriptors)

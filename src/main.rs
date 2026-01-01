@@ -8,6 +8,7 @@ mod bvh;
 mod camera;
 mod cli;
 mod color;
+mod film;
 mod hittable;
 mod intersection;
 mod lights;
