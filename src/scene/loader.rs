@@ -584,4 +584,20 @@ objects:
         assert_eq!(modular.planes.len(), monolithic.planes.len());
         assert_eq!(modular.objects.len(), monolithic.objects.len());
     }
+
+    #[test]
+    fn neon_formats_share_render_and_lighting_settings() {
+        let ron = load_scene_file("scenes/neon.ron").unwrap();
+        let json = load_scene_file("scenes/neon.json").unwrap();
+        let yaml = load_scene_file("scenes/neon.yaml").unwrap();
+        assert_eq!(json.objects.len(), ron.objects.len());
+        assert_eq!(yaml.objects.len(), ron.objects.len());
+        assert_eq!(json.planes.len(), ron.planes.len());
+        assert_eq!(yaml.render.output, ron.render.output);
+        assert_eq!(json.render.gamma, GammaEncoding::Srgb);
+        assert_eq!(yaml.render.aa, AntiAliasing::Halton);
+        assert_eq!(json.render.filter, PixelFilter::Gaussian);
+        assert!((json.render.exposure - 1.2).abs() < 1e-9);
+        assert_eq!(yaml.sky.horizon, ron.sky.horizon);
+    }
 }

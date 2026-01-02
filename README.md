@@ -33,6 +33,8 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 |------|-------------|
 | `-o`, `--output PATH` | Write the image to `PATH` instead of the scene's `render.output` |
 | `-s`, `--samples N` | Trace `N` samples per pixel (minimum 1) |
+| `--width W` | Render at `W` pixels wide instead of the scene's `render.width` |
+| `--height H` | Render at `H` pixels tall instead of the scene's `render.height` |
 | `--format FMT` | Force scene parser: `ron`, `json`, or `yaml` (default: from extension) |
 | `--gamma MODE` | Output encoding: `gamma2` (default), `srgb`, or `linear` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
@@ -266,6 +268,62 @@ Scene excerpt (RON):
 
 The optional `sky` block sets `horizon` and `zenith` RGB colors for the background gradient; omit it to keep the default white-to-blue sky used by `demo.*` and other indoor scenes. The same scene is available as `scenes/sunset.json` and `scenes/sunset.yaml`.
 
+## Example render: neon alley
+
+The `scenes/neon.*` files set up a nighttime street scene with a dark purple sky gradient, a matte asphalt ground plane, and three small emissive spheres acting as colored neon signs — cyan on the left, magenta on the right, and warm yellow toward the back. A glass dielectric orb sits in the center of the alley; a chrome metal sphere and a dark diffuse accent ball flank it on the wet pavement. Halton quasi-random anti-aliasing and a Gaussian pixel filter help the bright sign colors converge cleanly at moderate sample counts.
+
+```bash
+cargo run --release -- scenes/neon.ron
+# writes neon.png (800×450, 100 spp)
+
+# low-res preview while tuning sign colors or exposure
+cargo run --release -- --width 400 --height 225 --samples 16 --output neon-preview.png scenes/neon.json
+```
+
+Scene excerpt (RON):
+
+```ron
+(
+    camera: (
+        lookfrom: (0.0, 1.2, 4.5),
+        lookat: (0.0, 0.5, -0.5),
+        vfov: 42.0,
+        aperture: 0.04,
+        focus_distance: 4.5,
+    ),
+    render: (
+        width: 800,
+        height: 450,
+        samples_per_pixel: 100,
+        max_depth: 50,
+        output: "neon.png",
+        gamma: srgb,
+        exposure: 1.2,
+        aa: halton,
+        filter: gaussian,
+    ),
+    sky: (
+        horizon: (0.15, 0.08, 0.25),
+        zenith: (0.02, 0.04, 0.12),
+    ),
+    objects: [
+        (
+            center: (-2.5, 1.8, -1.0),
+            radius: 0.15,
+            material: Emissive(color: (0.2, 0.95, 1.0), intensity: 12.0),
+        ),
+        (
+            center: (2.0, 2.2, 0.5),
+            radius: 0.12,
+            material: Emissive(color: (1.0, 0.15, 0.85), intensity: 10.0),
+        ),
+        // ... yellow sign, glass orb, metal and diffuse spheres
+    ],
+)
+```
+
+The same scene is available as `scenes/neon.json` and `scenes/neon.yaml`.
+
 ### Modular scenes with `include`
 
 Split large JSON/YAML scenes into reusable fragments and wire them together with an `include` array. Paths are resolved relative to the file that lists them; nested includes and mixed formats (for example, a JSON root including YAML fragments) are supported.
@@ -438,7 +496,7 @@ src/
     mod.rs      — runtime Scene type and world construction
   lights.rs     — emissive sphere lights and direct sampling
   renderer.rs   — Monte Carlo path tracing loop
-scenes/         — example scene files (demo, studio, cornell, sunset, modular cornell)
+scenes/         — example scene files (demo, studio, cornell, sunset, neon, modular cornell)
 scenes/fragments/ — reusable geometry fragments for include-based scenes
 ```
 

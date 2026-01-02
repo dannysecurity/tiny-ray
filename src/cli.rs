@@ -20,6 +20,8 @@ Arguments:
 Options:
   -o, --output PATH     Override the output image path from the scene file
   -s, --samples N       Override samples per pixel (useful for quick previews)
+      --width W         Override image width in pixels
+      --height H        Override image height in pixels
       --format FMT      Force scene parser: ron, json, or yaml (default: from extension)
       --gamma MODE      Override output gamma: gamma2, srgb, or linear
       --exposure F      Override linear exposure multiplier (default 1.0)
@@ -30,6 +32,7 @@ Options:
 Examples:
   cargo run --release -- scenes/studio.ron
   cargo run --release -- --samples 10 --output preview.png scenes/studio.json
+  cargo run --release -- --width 400 --height 225 --samples 8 scenes/neon.ron
   cargo run --release -- --format yaml scenes/cornell-modular.yaml
   cargo run --release -- --gamma srgb --aa stratified --filter mitchell scenes/studio.ron
 ";
@@ -39,6 +42,8 @@ pub struct CliOptions {
     pub scene_path: PathBuf,
     pub output: Option<String>,
     pub samples: Option<u32>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
     pub format: Option<SceneFormat>,
     pub gamma: Option<GammaEncoding>,
     pub exposure: Option<f64>,
@@ -60,6 +65,8 @@ impl CliOptions {
         let mut scene_path = None;
         let mut output = None;
         let mut samples = None;
+        let mut width = None;
+        let mut height = None;
         let mut format = None;
         let mut gamma = None;
         let mut exposure = None;
@@ -85,6 +92,28 @@ impl CliOptions {
                     );
                     if samples == Some(0) {
                         return Err("samples must be at least 1".into());
+                    }
+                }
+                "--width" => {
+                    let value = next_value(&mut args, arg)?;
+                    width = Some(
+                        value
+                            .parse()
+                            .map_err(|_| format!("invalid width value: {value}"))?,
+                    );
+                    if width == Some(0) {
+                        return Err("width must be at least 1".into());
+                    }
+                }
+                "--height" => {
+                    let value = next_value(&mut args, arg)?;
+                    height = Some(
+                        value
+                            .parse()
+                            .map_err(|_| format!("invalid height value: {value}"))?,
+                    );
+                    if height == Some(0) {
+                        return Err("height must be at least 1".into());
                     }
                 }
                 "--gamma" => {
@@ -123,6 +152,8 @@ impl CliOptions {
             scene_path: scene_path.unwrap_or_else(|| PathBuf::from("scenes/demo.ron")),
             output,
             samples,
+            width,
+            height,
             format,
             gamma,
             exposure,
@@ -138,6 +169,12 @@ impl CliOptions {
         }
         if let Some(samples) = self.samples {
             scene.render.samples_per_pixel = samples;
+        }
+        if let Some(width) = self.width {
+            scene.render.width = width;
+        }
+        if let Some(height) = self.height {
+            scene.render.height = height;
         }
         if let Some(gamma) = self.gamma {
             scene.render.gamma = gamma;
@@ -207,6 +244,8 @@ mod tests {
         assert_eq!(options.scene_path, PathBuf::from("scenes/demo.ron"));
         assert_eq!(options.output, None);
         assert_eq!(options.samples, None);
+        assert_eq!(options.width, None);
+        assert_eq!(options.height, None);
         assert_eq!(options.gamma, None);
         assert_eq!(options.exposure, None);
         assert_eq!(options.aa, None);
@@ -286,12 +325,38 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_accepts_width_and_height() {
+        let options = CliOptions::parse_from([
+            "--width",
+            "320",
+            "--height",
+            "180",
+            "scenes/neon.ron",
+        ])
+        .unwrap();
+        assert_eq!(options.width, Some(320));
+        assert_eq!(options.height, Some(180));
+    }
+
+    #[test]
+    fn parse_args_rejects_zero_width() {
+        assert!(CliOptions::parse_from(["--width", "0"]).is_err());
+    }
+
+    #[test]
+    fn parse_args_rejects_zero_height() {
+        assert!(CliOptions::parse_from(["--height", "0"]).is_err());
+    }
+
+    #[test]
     fn apply_to_scene_updates_render_settings() {
         let mut scene = Scene::default_demo();
         let options = CliOptions {
             scene_path: PathBuf::from("scenes/demo.ron"),
             output: Some("override.png".into()),
             samples: Some(4),
+            width: Some(320),
+            height: Some(240),
             format: None,
             gamma: Some(GammaEncoding::Srgb),
             exposure: Some(0.8),
@@ -301,6 +366,8 @@ mod tests {
         options.apply_to_scene(&mut scene);
         assert_eq!(scene.render.output, "override.png");
         assert_eq!(scene.render.samples_per_pixel, 4);
+        assert_eq!(scene.render.width, 320);
+        assert_eq!(scene.render.height, 240);
         assert_eq!(scene.render.gamma, GammaEncoding::Srgb);
         assert_eq!(scene.render.exposure, 0.8);
         assert_eq!(scene.render.aa, AntiAliasing::Stratified);
