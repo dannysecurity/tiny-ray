@@ -45,6 +45,7 @@ impl<'a> RenderContext<'a> {
             pipeline: ColorPipeline {
                 gamma: scene.render.gamma,
                 exposure: scene.render.exposure,
+                tone_map: scene.render.tone_map,
             },
             tracer: PathTracer::new(
                 scene.world.as_ref(),
@@ -56,12 +57,13 @@ impl<'a> RenderContext<'a> {
 
     fn log_banner(&self) {
         eprintln!(
-            "Rendering {}x{} ({} spp, depth {}, gamma {:?}, aa {:?}, filter {:?})",
+            "Rendering {}x{} ({} spp, depth {}, gamma {:?}, tone_map {:?}, aa {:?}, filter {:?})",
             self.width,
             self.height,
             self.samples_per_pixel,
             self.max_depth,
             self.pipeline.gamma,
+            self.pipeline.tone_map,
             self.aa,
             self.filter,
         );

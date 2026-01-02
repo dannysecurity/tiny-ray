@@ -38,6 +38,7 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--format FMT` | Force scene parser: `ron`, `json`, or `yaml` (default: from extension) |
 | `--gamma MODE` | Output encoding: `gamma2` (default), `srgb`, or `linear` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
+| `--tone-map MODE` | HDR tone mapping before gamma: `none` (default), `reinhard`, or `aces` |
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
 | `--filter MODE` | Pixel reconstruction filter: `box` (default), `gaussian`, or `mitchell` |
 | `-h`, `--help` | Print usage |
@@ -270,7 +271,7 @@ The optional `sky` block sets `horizon` and `zenith` RGB colors for the backgrou
 
 ## Example render: neon alley
 
-The `scenes/neon.*` files set up a nighttime street scene with a dark purple sky gradient, a matte asphalt ground plane, and three small emissive spheres acting as colored neon signs — cyan on the left, magenta on the right, and warm yellow toward the back. A glass dielectric orb sits in the center of the alley; a chrome metal sphere and a dark diffuse accent ball flank it on the wet pavement. Halton quasi-random anti-aliasing and a Gaussian pixel filter help the bright sign colors converge cleanly at moderate sample counts.
+The `scenes/neon.*` files set up a nighttime street scene with a dark purple sky gradient, a matte asphalt ground plane, and three small emissive spheres acting as colored neon signs — cyan on the left, magenta on the right, and warm yellow toward the back. A glass dielectric orb sits in the center of the alley; a chrome metal sphere and a dark diffuse accent ball flank it on the wet pavement. Halton quasi-random anti-aliasing, a Gaussian pixel filter, and ACES filmic tone mapping help the bright sign colors converge cleanly at moderate sample counts.
 
 ```bash
 cargo run --release -- scenes/neon.ron
@@ -299,6 +300,7 @@ Scene excerpt (RON):
         output: "neon.png",
         gamma: srgb,
         exposure: 1.2,
+        tone_map: aces,
         aa: halton,
         filter: gaussian,
     ),
@@ -419,11 +421,12 @@ Materials use an externally tagged enum in JSON and YAML (`"Lambertian": { "albe
 | `max_depth` | — | Maximum path bounces |
 | `output` | — | Output PNG path |
 | `gamma` | `gamma2` | Output encoding: `gamma2`, `srgb`, or `linear` |
-| `exposure` | `1.0` | Linear exposure multiplier before gamma encoding |
+| `exposure` | `1.0` | Linear exposure multiplier before tone mapping and gamma encoding |
+| `tone_map` | `none` | HDR compression before gamma: `none`, `reinhard`, or `aces` |
 | `aa` | `random` | Sub-pixel sampling: `random`, `stratified`, or `halton` |
 | `filter` | `box` | Pixel reconstruction filter: `box`, `gaussian`, or `mitchell` |
 
-Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
+Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure, optional tone mapping, and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For HDR scenes with bright emissive lights, try ACES filmic tone mapping (`--tone-map aces`). For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
 
 ```ron
 render: (
@@ -485,7 +488,7 @@ src/
   hittable.rs   — hit records and AABB tests
   bvh.rs        — bounding volume hierarchy
   camera.rs     — thin-lens perspective camera
-  color.rs      — gamma correction, exposure, and pixel encoding
+  color.rs      — gamma correction, tone mapping, exposure, and pixel encoding
   sampling.rs   — anti-aliasing sample strategies (random, stratified, halton)
   film.rs       — pixel reconstruction filters (box, Gaussian, Mitchell)
   sky.rs        — configurable vertical sky gradient for miss rays

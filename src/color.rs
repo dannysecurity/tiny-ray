@@ -3,6 +3,24 @@ use serde::Deserialize;
 
 use crate::vec3::Color;
 
+/// HDR-to-display compression applied after exposure and before gamma encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToneMapping {
+    /// No tone mapping; linear values pass through after exposure (legacy behavior).
+    None,
+    /// Simple Reinhard per-channel compression: x / (1 + x).
+    Reinhard,
+    /// ACES filmic approximation (Narkowicz 2015).
+    Aces,
+}
+
+impl Default for ToneMapping {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 /// How linear radiance is encoded into 8-bit display values.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -26,6 +44,7 @@ impl Default for GammaEncoding {
 pub struct ColorPipeline {
     pub gamma: GammaEncoding,
     pub exposure: f64,
+    pub tone_map: ToneMapping,
 }
 
 impl Default for ColorPipeline {
@@ -33,6 +52,7 @@ impl Default for ColorPipeline {
         Self {
             gamma: GammaEncoding::default(),
             exposure: 1.0,
+            tone_map: ToneMapping::default(),
         }
     }
 }
@@ -47,14 +67,48 @@ impl ColorPipeline {
         )
     }
 
+    pub fn apply_tone_map(&self, color: Color) -> Color {
+        let color = sanitize_color(color);
+        match self.tone_map {
+            ToneMapping::None => color,
+            ToneMapping::Reinhard => Color::new(
+                reinhard(color.x),
+                reinhard(color.y),
+                reinhard(color.z),
+            ),
+            ToneMapping::Aces => Color::new(
+                aces_filmic(color.x),
+                aces_filmic(color.y),
+                aces_filmic(color.z),
+            ),
+        }
+    }
+
     pub fn encode_pixel(&self, color: Color) -> Rgb<u8> {
         let exposed = self.apply_exposure(color);
+        let mapped = self.apply_tone_map(exposed);
         Rgb([
-            encode_channel(exposed.x, self.gamma),
-            encode_channel(exposed.y, self.gamma),
-            encode_channel(exposed.z, self.gamma),
+            encode_channel(mapped.x, self.gamma),
+            encode_channel(mapped.y, self.gamma),
+            encode_channel(mapped.z, self.gamma),
         ])
     }
+}
+
+fn reinhard(linear: f64) -> f64 {
+    let linear = linear.max(0.0);
+    linear / (1.0 + linear)
+}
+
+/// ACES filmic tone curve (Narkowicz approximation).
+fn aces_filmic(linear: f64) -> f64 {
+    const A: f64 = 2.51;
+    const B: f64 = 0.03;
+    const C: f64 = 2.43;
+    const D: f64 = 0.59;
+    const E: f64 = 0.14;
+    let x = linear.max(0.0);
+    (x * (A * x + B)) / (x * (C * x + D) + E)
 }
 
 /// Clamp negative values and replace NaN/Inf with black so bad paths do not poison PNG output.
@@ -121,6 +175,7 @@ mod tests {
         let pipeline = ColorPipeline {
             gamma: GammaEncoding::Gamma2,
             exposure: 1.0,
+            tone_map: ToneMapping::None,
         };
         let pixel = pipeline.encode_pixel(Color::new(0.25, 0.25, 0.25));
         assert_eq!(pixel.0, [128, 128, 128]);
@@ -131,6 +186,7 @@ mod tests {
         let pipeline = ColorPipeline {
             gamma: GammaEncoding::Linear,
             exposure: 2.0,
+            tone_map: ToneMapping::None,
         };
         let pixel = pipeline.encode_pixel(Color::new(0.25, 0.0, 0.0));
         assert_eq!(pixel.0[0], 128);
@@ -147,6 +203,7 @@ mod tests {
         let pipeline = ColorPipeline {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
+            tone_map: ToneMapping::None,
         };
         let pixel = pipeline.encode_pixel(Color::new(2.0, -1.0, 0.5));
         assert_eq!(pixel.0, [255, 0, 128]);
@@ -158,6 +215,7 @@ mod tests {
             let pipeline = ColorPipeline {
                 gamma,
                 exposure: 1.0,
+                tone_map: ToneMapping::None,
             };
             let pixel = pipeline.encode_pixel(Color::new(1.0, 1.0, 1.0));
             assert_eq!(pixel.0, [255, 255, 255], "gamma {:?}", gamma);
@@ -175,8 +233,56 @@ mod tests {
         let pipeline = ColorPipeline {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
+            tone_map: ToneMapping::None,
         };
         let pixel = pipeline.encode_pixel(Color::new(f64::NAN, 0.5, f64::INFINITY));
         assert_eq!(pixel.0, [0, 128, 0]);
+    }
+
+    #[test]
+    fn reinhard_compresses_bright_highlights() {
+        let pipeline = ColorPipeline {
+            gamma: GammaEncoding::Linear,
+            exposure: 1.0,
+            tone_map: ToneMapping::Reinhard,
+        };
+        let pixel = pipeline.encode_pixel(Color::new(4.0, 0.0, 0.0));
+        assert_eq!(pixel.0[0], 204);
+    }
+
+    #[test]
+    fn reinhard_preserves_midtones_near_identity() {
+        let pipeline = ColorPipeline {
+            gamma: GammaEncoding::Linear,
+            exposure: 1.0,
+            tone_map: ToneMapping::Reinhard,
+        };
+        let mapped = pipeline.apply_tone_map(Color::new(0.25, 0.5, 0.75));
+        assert!((mapped.x - 0.2).abs() < 1e-12);
+        assert!((mapped.y - 1.0 / 3.0).abs() < 1e-12);
+        assert!((mapped.z - 0.75 / 1.75).abs() < 1e-12);
+    }
+
+    #[test]
+    fn aces_maps_unit_white_below_linear_one() {
+        let pipeline = ColorPipeline {
+            gamma: GammaEncoding::Linear,
+            exposure: 1.0,
+            tone_map: ToneMapping::Aces,
+        };
+        let mapped = pipeline.apply_tone_map(Color::new(1.0, 1.0, 1.0));
+        assert!(mapped.x < 1.0);
+        assert!(mapped.x > 0.8);
+    }
+
+    #[test]
+    fn tone_map_runs_after_exposure() {
+        let pipeline = ColorPipeline {
+            gamma: GammaEncoding::Linear,
+            exposure: 2.0,
+            tone_map: ToneMapping::Reinhard,
+        };
+        let mapped = pipeline.apply_tone_map(pipeline.apply_exposure(Color::new(1.0, 0.0, 0.0)));
+        assert!((mapped.x - 2.0 / 3.0).abs() < 1e-12);
     }
 }

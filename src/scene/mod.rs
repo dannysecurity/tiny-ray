@@ -122,6 +122,7 @@ impl Scene {
                 exposure: 1.0,
                 aa: Default::default(),
                 filter: Default::default(),
+                tone_map: Default::default(),
             },
             sky: SkyGradient::default(),
             world,

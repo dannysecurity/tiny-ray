@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::color::GammaEncoding;
+use crate::color::{GammaEncoding, ToneMapping};
 use crate::film::PixelFilter;
 use crate::material::Material;
 use crate::sampling::AntiAliasing;
@@ -51,6 +51,8 @@ pub struct RenderDesc {
     pub aa: AntiAliasing,
     #[serde(default)]
     pub filter: PixelFilter,
+    #[serde(default)]
+    pub tone_map: ToneMapping,
 }
 
 fn default_exposure() -> f64 {

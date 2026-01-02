@@ -140,6 +140,7 @@ mod tests {
                 exposure: 1.0,
                 aa: Default::default(),
                 filter: Default::default(),
+                tone_map: Default::default(),
             },
             sky: Default::default(),
             objects: vec![SphereDesc {

@@ -13,6 +13,7 @@ render:
   output: neon.png
   gamma: srgb
   exposure: 1.2
+  tone_map: aces
   aa: halton
   filter: gaussian
 sky:
