@@ -352,12 +352,17 @@ mod tests {
     #[test]
     fn bvh_honors_t_max_interval() {
         let objects: Vec<Arc<dyn Hittable>> = vec![make_sphere((0.0, 0.0, 0.0), 1.0)];
-        let bvh = BvhNode::build(objects);
+        let bvh = BvhNode::build(objects.clone());
 
         let ray = Ray::new(Point3::new(-10.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), 0.0);
 
         assert!(bvh.hit(&ray, 0.001, 5.0).is_none());
+        assert!(bvh.hit(&ray, 0.001, 9.0).is_some());
         assert!(bvh.hit(&ray, 0.001, 10.0).is_some());
+        assert_eq!(
+            bvh.hit(&ray, 0.001, 9.0).unwrap().t,
+            brute_force_hit(&objects, &ray, 0.001, 9.0).unwrap().t,
+        );
     }
 
     #[test]

@@ -65,7 +65,7 @@ impl Aabb {
             let (t_near, t_far) = slab_interval(origin, direction, axis_min, axis_max);
             t_min = t_min.max(t_near);
             t_max = t_max.min(t_far);
-            if t_max <= t_min {
+            if t_max < t_min {
                 return false;
             }
         }
@@ -196,6 +196,7 @@ mod tests {
         let bbox = unit_cube();
         let ray = ray_from((0.0, 0.0, -5.0), (0.0, 0.0, 1.0));
         assert!(!bbox.hit(&ray, 0.001, 3.0));
+        assert!(bbox.hit(&ray, 0.001, 4.0));
         assert!(bbox.hit(&ray, 0.001, 5.0));
     }
 
