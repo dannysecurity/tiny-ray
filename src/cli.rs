@@ -3,7 +3,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::color::{GammaEncoding, ToneMapping};
+use crate::color::{GammaEncoding, InputColorSpace, ToneMapping};
 use crate::film::PixelFilter;
 use crate::sampling::AntiAliasing;
 use crate::scene::{Scene, SceneFormat};
@@ -24,6 +24,7 @@ Options:
       --height H        Override image height in pixels
       --format FMT      Force scene parser: ron, json, or yaml (default: from extension)
       --gamma MODE      Override output gamma: gamma2, srgb, or linear
+      --color-space MODE  Override scene color interpretation: linear or srgb
       --exposure F      Override linear exposure multiplier (default 1.0)
       --tone-map MODE   Override HDR tone mapping: none, reinhard, or aces
       --aa MODE         Override anti-aliasing: random, stratified, or halton
@@ -47,6 +48,7 @@ pub struct CliOptions {
     pub height: Option<u32>,
     pub format: Option<SceneFormat>,
     pub gamma: Option<GammaEncoding>,
+    pub color_space: Option<InputColorSpace>,
     pub exposure: Option<f64>,
     pub tone_map: Option<ToneMapping>,
     pub aa: Option<AntiAliasing>,
@@ -71,6 +73,7 @@ impl CliOptions {
         let mut height = None;
         let mut format = None;
         let mut gamma = None;
+        let mut color_space = None;
         let mut exposure = None;
         let mut tone_map = None;
         let mut aa = None;
@@ -122,6 +125,9 @@ impl CliOptions {
                 "--gamma" => {
                     gamma = Some(parse_gamma(&next_value(&mut args, arg)?)?);
                 }
+                "--color-space" => {
+                    color_space = Some(parse_color_space(&next_value(&mut args, arg)?)?);
+                }
                 "--format" => {
                     format = Some(SceneFormat::parse_name(&next_value(&mut args, arg)?)?);
                 }
@@ -162,6 +168,7 @@ impl CliOptions {
             height,
             format,
             gamma,
+            color_space,
             exposure,
             tone_map,
             aa,
@@ -169,35 +176,43 @@ impl CliOptions {
         })
     }
 
-    /// Apply CLI overrides onto a loaded scene's render settings.
-    pub fn apply_to_scene(&self, scene: &mut Scene) {
+    /// Apply CLI overrides onto render settings before building the scene world.
+    pub fn apply_to_render(&self, render: &mut crate::scene::RenderDesc) {
         if let Some(ref path) = self.output {
-            scene.render.output = path.clone();
+            render.output = path.clone();
         }
         if let Some(samples) = self.samples {
-            scene.render.samples_per_pixel = samples;
+            render.samples_per_pixel = samples;
         }
         if let Some(width) = self.width {
-            scene.render.width = width;
+            render.width = width;
         }
         if let Some(height) = self.height {
-            scene.render.height = height;
+            render.height = height;
         }
         if let Some(gamma) = self.gamma {
-            scene.render.gamma = gamma;
+            render.gamma = gamma;
+        }
+        if let Some(color_space) = self.color_space {
+            render.color_space = color_space;
         }
         if let Some(exposure) = self.exposure {
-            scene.render.exposure = exposure;
+            render.exposure = exposure;
         }
         if let Some(tone_map) = self.tone_map {
-            scene.render.tone_map = tone_map;
+            render.tone_map = tone_map;
         }
         if let Some(aa) = self.aa {
-            scene.render.aa = aa;
+            render.aa = aa;
         }
         if let Some(filter) = self.filter {
-            scene.render.filter = filter;
+            render.filter = filter;
         }
+    }
+
+    /// Apply CLI overrides onto a loaded scene's render settings.
+    pub fn apply_to_scene(&self, scene: &mut Scene) {
+        self.apply_to_render(&mut scene.render);
     }
 }
 
@@ -208,6 +223,16 @@ fn parse_gamma(value: &str) -> Result<GammaEncoding, String> {
         "linear" => Ok(GammaEncoding::Linear),
         _ => Err(format!(
             "invalid gamma mode: {value} (expected gamma2, srgb, or linear)"
+        )),
+    }
+}
+
+fn parse_color_space(value: &str) -> Result<InputColorSpace, String> {
+    match value {
+        "linear" => Ok(InputColorSpace::Linear),
+        "srgb" => Ok(InputColorSpace::Srgb),
+        _ => Err(format!(
+            "invalid color-space mode: {value} (expected linear or srgb)"
         )),
     }
 }
@@ -268,6 +293,7 @@ mod tests {
         assert_eq!(options.width, None);
         assert_eq!(options.height, None);
         assert_eq!(options.gamma, None);
+        assert_eq!(options.color_space, None);
         assert_eq!(options.exposure, None);
         assert_eq!(options.tone_map, None);
         assert_eq!(options.aa, None);
@@ -284,6 +310,18 @@ mod tests {
     #[test]
     fn parse_args_rejects_unknown_format() {
         assert!(CliOptions::parse_from(["--format", "toml"]).is_err());
+    }
+
+    #[test]
+    fn parse_args_accepts_color_space_override() {
+        let options =
+            CliOptions::parse_from(["--color-space", "srgb", "scenes/demo.ron"]).unwrap();
+        assert_eq!(options.color_space, Some(InputColorSpace::Srgb));
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_color_space() {
+        assert!(CliOptions::parse_from(["--color-space", "rec709"]).is_err());
     }
 
     #[test]
@@ -393,6 +431,7 @@ mod tests {
             height: Some(240),
             format: None,
             gamma: Some(GammaEncoding::Srgb),
+            color_space: Some(InputColorSpace::Srgb),
             exposure: Some(0.8),
             tone_map: Some(ToneMapping::Reinhard),
             aa: Some(AntiAliasing::Stratified),
@@ -404,6 +443,7 @@ mod tests {
         assert_eq!(scene.render.width, 320);
         assert_eq!(scene.render.height, 240);
         assert_eq!(scene.render.gamma, GammaEncoding::Srgb);
+        assert_eq!(scene.render.color_space, InputColorSpace::Srgb);
         assert_eq!(scene.render.exposure, 0.8);
         assert_eq!(scene.render.tone_map, ToneMapping::Reinhard);
         assert_eq!(scene.render.aa, AntiAliasing::Stratified);

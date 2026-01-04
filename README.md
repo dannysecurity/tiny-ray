@@ -37,6 +37,7 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--height H` | Render at `H` pixels tall instead of the scene's `render.height` |
 | `--format FMT` | Force scene parser: `ron`, `json`, or `yaml` (default: from extension) |
 | `--gamma MODE` | Output encoding: `gamma2` (default), `srgb`, or `linear` |
+| `--color-space MODE` | Scene color interpretation: `linear` (default) or `srgb` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
 | `--tone-map MODE` | HDR tone mapping before gamma: `none` (default), `reinhard`, or `aces` |
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
@@ -421,12 +422,13 @@ Materials use an externally tagged enum in JSON and YAML (`"Lambertian": { "albe
 | `max_depth` | — | Maximum path bounces |
 | `output` | — | Output PNG path |
 | `gamma` | `gamma2` | Output encoding: `gamma2`, `srgb`, or `linear` |
+| `color_space` | `linear` | Input interpretation for material albedos, emissive colors, and sky: `linear` or `srgb` |
 | `exposure` | `1.0` | Linear exposure multiplier before tone mapping and gamma encoding |
 | `tone_map` | `none` | HDR compression before gamma: `none`, `reinhard`, or `aces` |
 | `aa` | `random` | Sub-pixel sampling: `random`, `stratified`, or `halton` |
 | `filter` | `box` | Pixel reconstruction filter: `box`, `gaussian`, or `mitchell` |
 
-Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure, optional tone mapping, and gamma when writing 8-bit PNG pixels. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For HDR scenes with bright emissive lights, try ACES filmic tone mapping (`--tone-map aces`). For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
+Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure, optional tone mapping, and gamma when writing 8-bit PNG pixels. Set `color_space: srgb` when authoring albedos in display space (common in DCC tools); pair with `gamma: srgb` for a display-correct round trip. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For HDR scenes with bright emissive lights, try ACES filmic tone mapping (`--tone-map aces`). For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
 
 ```ron
 render: (
@@ -436,6 +438,7 @@ render: (
     max_depth: 50,
     output: "studio.png",
     gamma: srgb,
+    color_space: srgb,
     exposure: 1.0,
     aa: stratified,
     filter: mitchell,
@@ -488,7 +491,7 @@ src/
   hittable.rs   — hit records and AABB tests
   bvh.rs        — bounding volume hierarchy
   camera.rs     — thin-lens perspective camera
-  color.rs      — gamma correction, tone mapping, exposure, and pixel encoding
+  color.rs      — input color space, gamma correction, tone mapping, and pixel encoding
   sampling.rs   — anti-aliasing sample strategies (random, stratified, halton)
   film.rs       — pixel reconstruction filters (box, Gaussian, Mitchell)
   sky.rs        — configurable vertical sky gradient for miss rays

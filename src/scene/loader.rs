@@ -278,7 +278,7 @@ fn load_scene_resolved(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::color::{GammaEncoding, ToneMapping};
+    use crate::color::{GammaEncoding, InputColorSpace, ToneMapping};
     use crate::film::PixelFilter;
     use crate::sampling::AntiAliasing;
 
@@ -440,6 +440,7 @@ objects:
         assert_eq!(scene.render.aa, AntiAliasing::Random);
         assert_eq!(scene.render.filter, PixelFilter::Box);
         assert_eq!(scene.render.tone_map, ToneMapping::None);
+        assert_eq!(scene.render.color_space, InputColorSpace::Linear);
     }
 
     #[test]
@@ -465,6 +466,31 @@ objects:
         }"#;
         let scene = SceneFormat::Json.parse(json).unwrap();
         assert_eq!(scene.render.tone_map, ToneMapping::Aces);
+    }
+
+    #[test]
+    fn render_desc_parses_color_space() {
+        let json = r#"{
+            "camera": {
+                "lookfrom": [0.0, 0.0, 5.0],
+                "lookat": [0.0, 0.0, 0.0],
+                "vup": [0.0, 1.0, 0.0],
+                "vfov": 45.0,
+                "aperture": 0.0,
+                "focus_distance": 1.0
+            },
+            "render": {
+                "width": 32,
+                "height": 32,
+                "samples_per_pixel": 4,
+                "max_depth": 4,
+                "output": "srgb-input.png",
+                "color_space": "srgb"
+            },
+            "objects": []
+        }"#;
+        let scene = SceneFormat::Json.parse(json).unwrap();
+        assert_eq!(scene.render.color_space, InputColorSpace::Srgb);
     }
 
     #[test]

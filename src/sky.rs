@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use crate::color::{decode_scene_color, InputColorSpace};
 use crate::vec3::{Color, Vec3};
 
 /// Vertical gradient used when a ray misses geometry.
@@ -19,10 +20,10 @@ impl Default for SkyDesc {
 }
 
 impl SkyDesc {
-    pub fn into_sky(self) -> SkyGradient {
+    pub fn into_sky(self, color_space: InputColorSpace) -> SkyGradient {
         SkyGradient {
-            horizon: Color::from_array(self.horizon),
-            zenith: Color::from_array(self.zenith),
+            horizon: decode_scene_color(self.horizon, color_space),
+            zenith: decode_scene_color(self.zenith, color_space),
         }
     }
 }
@@ -35,7 +36,7 @@ pub struct SkyGradient {
 
 impl Default for SkyGradient {
     fn default() -> Self {
-        SkyDesc::default().into_sky()
+        SkyDesc::default().into_sky(InputColorSpace::Linear)
     }
 }
 

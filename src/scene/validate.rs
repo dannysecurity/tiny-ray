@@ -141,6 +141,7 @@ mod tests {
                 aa: Default::default(),
                 filter: Default::default(),
                 tone_map: Default::default(),
+                color_space: Default::default(),
             },
             sky: Default::default(),
             objects: vec![SphereDesc {

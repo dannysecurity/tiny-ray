@@ -13,10 +13,9 @@ use std::sync::Arc;
 
 use crate::hittable::Hittable;
 use crate::lights::LightList;
-use crate::material::Material;
 use crate::sky::SkyGradient;
-use crate::sphere::Sphere;
-use crate::vec3::{Color, Point3};
+
+use format::{MaterialDesc, SphereDesc};
 pub struct Scene {
     pub camera: CameraDesc,
     pub render: RenderDesc,
@@ -41,8 +40,9 @@ impl Scene {
     pub fn from_scene_file(file: SceneFile) -> Self {
         let camera = file.camera;
         let render = file.render;
-        let sky = file.sky.into_sky();
-        let built = BuiltWorld::from_geometry(file.objects, file.planes);
+        let color_space = render.color_space;
+        let sky = file.sky.into_sky(color_space);
+        let built = BuiltWorld::from_geometry(file.objects, file.planes, color_space);
         Self {
             camera,
             render,
@@ -53,57 +53,12 @@ impl Scene {
     }
 
     pub fn default_demo() -> Self {
-        let spheres = vec![
-            Sphere::new(
-                Point3::new(0.0, 1.0, 0.0),
-                1.0,
-                Arc::new(Material::Lambertian {
-                    albedo: Color::new(0.8, 0.2, 0.2),
-                }),
-            ),
-            Sphere::new(
-                Point3::new(-4.0, 1.0, 0.0),
-                1.0,
-                Arc::new(Material::Lambertian {
-                    albedo: Color::new(0.2, 0.8, 0.2),
-                }),
-            ),
-            Sphere::new(
-                Point3::new(4.0, 1.0, 0.0),
-                1.0,
-                Arc::new(Material::Metal {
-                    albedo: Color::new(0.8, 0.8, 0.9),
-                    fuzz: 0.05,
-                }),
-            ),
-            Sphere::new(
-                Point3::new(0.0, 1.0, -4.0),
-                1.0,
-                Arc::new(Material::Dielectric { index: 1.5 }),
-            ),
-            Sphere::new(
-                Point3::new(0.0, -1000.0, 0.0),
-                1000.0,
-                Arc::new(Material::Lambertian {
-                    albedo: Color::new(0.5, 0.5, 0.5),
-                }),
-            ),
-            Sphere::new(
-                Point3::new(0.0, 8.0, 0.0),
-                3.0,
-                Arc::new(Material::Emissive {
-                    color: Color::new(1.0, 0.95, 0.8),
-                    intensity: 4.0,
-                }),
-            ),
-        ];
-        let lights = LightList::from_spheres(&spheres);
-        let objects: Vec<Arc<dyn Hittable>> = spheres
-            .into_iter()
-            .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
-            .collect();
-        let world = accelerate_world(objects);
-        Self {
+        Self::from_scene_file(Self::default_demo_file())
+    }
+
+    pub fn default_demo_file() -> SceneFile {
+        SceneFile {
+            include: vec![],
             camera: CameraDesc {
                 lookfrom: [13.0, 2.0, 3.0],
                 lookat: [0.0, 1.0, 0.0],
@@ -123,10 +78,54 @@ impl Scene {
                 aa: Default::default(),
                 filter: Default::default(),
                 tone_map: Default::default(),
+                color_space: Default::default(),
             },
-            sky: SkyGradient::default(),
-            world,
-            lights,
+            sky: Default::default(),
+            objects: vec![
+                SphereDesc {
+                    center: [0.0, 1.0, 0.0],
+                    radius: 1.0,
+                    material: MaterialDesc::Lambertian {
+                        albedo: [0.8, 0.2, 0.2],
+                    },
+                },
+                SphereDesc {
+                    center: [-4.0, 1.0, 0.0],
+                    radius: 1.0,
+                    material: MaterialDesc::Lambertian {
+                        albedo: [0.2, 0.8, 0.2],
+                    },
+                },
+                SphereDesc {
+                    center: [4.0, 1.0, 0.0],
+                    radius: 1.0,
+                    material: MaterialDesc::Metal {
+                        albedo: [0.8, 0.8, 0.9],
+                        fuzz: 0.05,
+                    },
+                },
+                SphereDesc {
+                    center: [0.0, 1.0, -4.0],
+                    radius: 1.0,
+                    material: MaterialDesc::Dielectric { index: 1.5 },
+                },
+                SphereDesc {
+                    center: [0.0, -1000.0, 0.0],
+                    radius: 1000.0,
+                    material: MaterialDesc::Lambertian {
+                        albedo: [0.5, 0.5, 0.5],
+                    },
+                },
+                SphereDesc {
+                    center: [0.0, 8.0, 0.0],
+                    radius: 3.0,
+                    material: MaterialDesc::Emissive {
+                        color: [1.0, 0.95, 0.8],
+                        intensity: 4.0,
+                    },
+                },
+            ],
+            planes: vec![],
         }
     }
 }
@@ -134,6 +133,19 @@ impl Scene {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn srgb_color_space_decodes_sky_colors_to_linear() {
+        use crate::color::{decode_scene_color, InputColorSpace, srgb_to_linear};
+
+        let mut file = Scene::default_demo_file();
+        file.render.color_space = InputColorSpace::Srgb;
+        file.sky.horizon = [0.5, 0.5, 0.5];
+        let scene = Scene::from_scene_file(file);
+        let expected = decode_scene_color([0.5, 0.5, 0.5], InputColorSpace::Srgb);
+        assert_eq!(scene.sky.horizon, expected);
+        assert!((scene.sky.horizon.x - srgb_to_linear(0.5)).abs() < 1e-12);
+    }
 
     #[test]
     fn from_file_builds_demo_lights() {

@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::color::{GammaEncoding, ToneMapping};
+use crate::color::{decode_scene_color, GammaEncoding, InputColorSpace, ToneMapping};
 use crate::film::PixelFilter;
 use crate::material::Material;
 use crate::sampling::AntiAliasing;
 pub use crate::sky::SkyDesc;
-use crate::vec3::Color;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct SceneFile {
@@ -53,6 +52,8 @@ pub struct RenderDesc {
     pub filter: PixelFilter,
     #[serde(default)]
     pub tone_map: ToneMapping,
+    #[serde(default)]
+    pub color_space: InputColorSpace,
 }
 
 fn default_exposure() -> f64 {
@@ -84,18 +85,18 @@ pub enum MaterialDesc {
 }
 
 impl MaterialDesc {
-    pub fn into_material(self) -> Arc<Material> {
+    pub fn into_material(self, color_space: InputColorSpace) -> Arc<Material> {
         Arc::new(match self {
             MaterialDesc::Lambertian { albedo } => Material::Lambertian {
-                albedo: Color::from_array(albedo),
+                albedo: decode_scene_color(albedo, color_space),
             },
             MaterialDesc::Metal { albedo, fuzz } => Material::Metal {
-                albedo: Color::from_array(albedo),
+                albedo: decode_scene_color(albedo, color_space),
                 fuzz,
             },
             MaterialDesc::Dielectric { index } => Material::Dielectric { index },
             MaterialDesc::Emissive { color, intensity } => Material::Emissive {
-                color: Color::from_array(color),
+                color: decode_scene_color(color, color_space),
                 intensity,
             },
         })

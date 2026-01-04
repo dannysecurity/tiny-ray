@@ -3,7 +3,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use crate::camera::Camera;
-use crate::color::ColorPipeline;
+use crate::color::{ColorPipeline, InputColorSpace};
 use crate::film::{accumulate_weighted, PixelFilter};
 use crate::sampling::{pixel_offsets, AntiAliasing};
 use crate::scene::Scene;
@@ -21,6 +21,7 @@ struct RenderContext<'a> {
     max_depth: u32,
     aa: AntiAliasing,
     filter: PixelFilter,
+    color_space: InputColorSpace,
 }
 
 impl<'a> RenderContext<'a> {
@@ -33,6 +34,7 @@ impl<'a> RenderContext<'a> {
             max_depth: scene.render.max_depth,
             aa: scene.render.aa,
             filter: scene.render.filter,
+            color_space: scene.render.color_space,
             camera: Camera::new(
                 Point3::from_array(scene.camera.lookfrom),
                 Point3::from_array(scene.camera.lookat),
@@ -57,11 +59,12 @@ impl<'a> RenderContext<'a> {
 
     fn log_banner(&self) {
         eprintln!(
-            "Rendering {}x{} ({} spp, depth {}, gamma {:?}, tone_map {:?}, aa {:?}, filter {:?})",
+            "Rendering {}x{} ({} spp, depth {}, color_space {:?}, gamma {:?}, tone_map {:?}, aa {:?}, filter {:?})",
             self.width,
             self.height,
             self.samples_per_pixel,
             self.max_depth,
+            self.color_space,
             self.pipeline.gamma,
             self.pipeline.tone_map,
             self.aa,

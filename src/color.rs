@@ -21,6 +21,22 @@ impl Default for ToneMapping {
     }
 }
 
+/// How scene-authored RGB triples are interpreted before path tracing.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputColorSpace {
+    /// Colors are already linear light intensities (legacy default).
+    Linear,
+    /// Colors are sRGB-encoded display values decoded to linear at load time.
+    Srgb,
+}
+
+impl Default for InputColorSpace {
+    fn default() -> Self {
+        Self::Linear
+    }
+}
+
 /// How linear radiance is encoded into 8-bit display values.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -158,6 +174,18 @@ pub fn srgb_to_linear(srgb: f64) -> f64 {
     }
 }
 
+/// Convert a scene-authored RGB triple into linear radiance for shading.
+pub fn decode_scene_color(rgb: [f64; 3], space: InputColorSpace) -> Color {
+    match space {
+        InputColorSpace::Linear => Color::from_array(rgb),
+        InputColorSpace::Srgb => Color::new(
+            srgb_to_linear(rgb[0]),
+            srgb_to_linear(rgb[1]),
+            srgb_to_linear(rgb[2]),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,6 +196,28 @@ mod tests {
         let encoded = linear_to_srgb(linear);
         let decoded = srgb_to_linear(encoded);
         assert!((decoded - linear).abs() < 1e-6);
+    }
+
+    #[test]
+    fn decode_scene_color_linear_is_identity() {
+        let rgb = [0.25, 0.5, 0.75];
+        let color = decode_scene_color(rgb, InputColorSpace::Linear);
+        assert_eq!(color, Color::from_array(rgb));
+    }
+
+    #[test]
+    fn decode_scene_color_srgb_decodes_to_linear() {
+        let color = decode_scene_color([0.5, 0.5, 0.5], InputColorSpace::Srgb);
+        let expected = srgb_to_linear(0.5);
+        assert!((color.x - expected).abs() < 1e-12);
+        assert!((color.y - expected).abs() < 1e-12);
+        assert!((color.z - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn decode_scene_color_srgb_dark_segment_is_linear() {
+        let color = decode_scene_color([0.04, 0.04, 0.04], InputColorSpace::Srgb);
+        assert!((color.x - 0.04 / 12.92).abs() < 1e-12);
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::color::InputColorSpace;
 use crate::hittable::Hittable;
 use crate::lights::LightList;
 use crate::plane::Plane;
@@ -21,10 +22,11 @@ impl BuiltWorld {
     pub fn from_geometry(
         objects: Vec<super::format::SphereDesc>,
         planes: Vec<super::format::PlaneDesc>,
+        color_space: InputColorSpace,
     ) -> Self {
-        let spheres = build_spheres(objects);
+        let spheres = build_spheres(objects, color_space);
         let lights = LightList::from_spheres(&spheres);
-        let infinite_planes = build_planes(planes);
+        let infinite_planes = build_planes(planes, color_space);
         let bounded = spheres
             .into_iter()
             .map(|sphere| Arc::new(sphere) as Arc<dyn Hittable>)
@@ -36,27 +38,27 @@ impl BuiltWorld {
     }
 }
 
-fn build_spheres(descriptors: Vec<SphereDesc>) -> Vec<Sphere> {
+fn build_spheres(descriptors: Vec<SphereDesc>, color_space: InputColorSpace) -> Vec<Sphere> {
     descriptors
         .into_iter()
         .map(|descriptor| {
             Sphere::new(
                 Point3::from_array(descriptor.center),
                 descriptor.radius,
-                descriptor.material.into_material(),
+                descriptor.material.into_material(color_space),
             )
         })
         .collect()
 }
 
-fn build_planes(descriptors: Vec<PlaneDesc>) -> Vec<Arc<dyn Hittable>> {
+fn build_planes(descriptors: Vec<PlaneDesc>, color_space: InputColorSpace) -> Vec<Arc<dyn Hittable>> {
     descriptors
         .into_iter()
         .map(|descriptor| {
             Arc::new(Plane::new(
                 Point3::from_array(descriptor.point),
                 Vec3::from_array(descriptor.normal),
-                descriptor.material.into_material(),
+                descriptor.material.into_material(color_space),
             )) as Arc<dyn Hittable>
         })
         .collect()
@@ -104,7 +106,7 @@ mod tests {
     #[test]
     fn from_geometry_builds_demo_lights() {
         let file = load_scene_file("scenes/demo.ron").unwrap();
-        let built = BuiltWorld::from_geometry(file.objects, file.planes);
+        let built = BuiltWorld::from_geometry(file.objects, file.planes, Default::default());
         assert_eq!(built.lights.len(), 1);
         let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), 0.0);
         assert!(built.world.hit(&ray, 0.001, f64::INFINITY).is_some());

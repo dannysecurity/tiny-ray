@@ -27,6 +27,7 @@ mod world;
 pub use scene::Scene;
 
 use cli::{CliOptions, USAGE};
+use scene::load_scene_file_with_format;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = CliOptions::from_env().map_err(|message| {
@@ -35,13 +36,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         message
     })?;
 
-    let mut scene = if options.scene_path.exists() {
-        Scene::from_file_with_format(&options.scene_path, options.format)?
+    let scene = if options.scene_path.exists() {
+        let mut file = load_scene_file_with_format(&options.scene_path, options.format)?;
+        options.apply_to_render(&mut file.render);
+        Scene::from_scene_file(file)
     } else {
         eprintln!("Scene file not found; using built-in demo scene");
-        Scene::default_demo()
+        let mut file = Scene::default_demo_file();
+        options.apply_to_render(&mut file.render);
+        Scene::from_scene_file(file)
     };
 
-    options.apply_to_scene(&mut scene);
     renderer::render(&scene)
 }
