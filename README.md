@@ -327,9 +327,22 @@ Scene excerpt (RON):
 
 The same scene is available as `scenes/neon.json` and `scenes/neon.yaml`.
 
-### Modular scenes with `include`
+## Example render: modular Cornell box
 
-Split large JSON/YAML scenes into reusable fragments and wire them together with an `include` array. Paths are resolved relative to the file that lists them; nested includes and mixed formats (for example, a JSON root including YAML fragments) are supported.
+The `scenes/cornell-modular.*` files reproduce the classic Cornell box from `scenes/cornell.*`, but split geometry into reusable fragments under `scenes/fragments/`. The root scene lists an `include` array; the loader merges each fragment’s `planes` and `objects` before building the BVH. This is useful when you want shared wall layouts or prop sets across several camera angles without duplicating YAML.
+
+```bash
+cargo run --release -- scenes/cornell-modular.yaml
+# writes cornell.png (800×450, 100 spp) — same output name as scenes/cornell.yaml
+
+# JSON root including YAML fragments (mixed formats)
+cargo run --release -- scenes/cornell-modular.json
+
+# quick preview while editing a fragment
+cargo run --release -- --samples 16 --output cornell-modular-preview.png scenes/cornell-modular.yaml
+```
+
+Scene excerpt (YAML root):
 
 ```yaml
 include:
@@ -338,14 +351,55 @@ include:
 camera:
   lookfrom: [0.0, 1.4, 3.8]
   lookat: [0.0, 1.0, 0.0]
-  # ...
+  vfov: 40.0
 render:
   width: 800
   height: 450
+  samples_per_pixel: 100
+  max_depth: 50
   output: cornell.png
+  gamma: srgb
+  aa: stratified
 ```
 
-Fragment files only need geometry (`objects`, `planes`, and optional nested `include` entries). The root scene supplies `camera` and `render`. See `scenes/cornell-modular.yaml` and `scenes/fragments/` for a working example equivalent to `scenes/cornell.yaml`.
+Wall fragment (`scenes/fragments/cornell-walls.yaml`):
+
+```yaml
+planes:
+  - point: [0.0, 0.0, 0.0]
+    normal: [0.0, 1.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.73, 0.73, 0.73]
+  - point: [-1.4, 0.0, 0.0]
+    normal: [1.0, 0.0, 0.0]
+    material:
+      Lambertian:
+        albedo: [0.65, 0.05, 0.05]
+  # ... ceiling, back wall, and right wall
+```
+
+Object fragment (`scenes/fragments/cornell-objects.yaml`):
+
+```yaml
+objects:
+  - center: [0.0, 2.65, 0.0]
+    radius: 0.35
+    material:
+      Emissive:
+        color: [1.0, 0.98, 0.9]
+        intensity: 12.0
+  - center: [0.0, 0.5, 0.0]
+    radius: 0.5
+    material:
+      Dielectric:
+        index: 1.5
+  # ... metal and diffuse spheres
+```
+
+### How `include` works
+
+Paths in `include` are resolved relative to the file that lists them. Nested includes and mixed formats (for example, a JSON root including YAML fragments) are supported. Fragment files only need geometry (`objects`, `planes`, and optional nested `include` entries); the root scene supplies `camera`, `render`, and optional `sky`.
 
 After parsing, the loader validates scene semantics (positive radii, non-zero plane normals, sane render dimensions, and more) and reports clear errors before building the BVH.
 
