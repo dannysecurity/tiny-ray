@@ -9,6 +9,31 @@ const SAH_NUM_BINS: usize = 12;
 const SAH_TRAVERSAL_COST: f64 = 0.125;
 const SAH_INTERSECTION_COST: f64 = 1.0;
 
+/// Summary counts for a built bounding volume hierarchy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BvhStats {
+    pub node_count: usize,
+    pub branch_count: usize,
+    pub leaf_count: usize,
+    pub primitive_count: usize,
+    pub max_depth: usize,
+    pub max_leaf_size: usize,
+}
+
+impl BvhStats {
+    pub fn format_summary(self) -> String {
+        format!(
+            "BVH: {} nodes ({} branches, {} leaves), {} primitives, depth {}, max leaf size {}",
+            self.node_count,
+            self.branch_count,
+            self.leaf_count,
+            self.primitive_count,
+            self.max_depth,
+            self.max_leaf_size
+        )
+    }
+}
+
 #[derive(Clone)]
 pub enum BvhNode {
     Leaf {
@@ -98,6 +123,34 @@ impl BvhNode {
             left: Arc::new(left),
             right: Arc::new(right),
             bbox,
+        }
+    }
+
+    /// Collect node, leaf, and primitive counts for this tree.
+    pub fn stats(&self) -> BvhStats {
+        match self {
+            BvhNode::Leaf { objects, .. } => BvhStats {
+                node_count: 1,
+                branch_count: 0,
+                leaf_count: 1,
+                primitive_count: objects.len(),
+                max_depth: 1,
+                max_leaf_size: objects.len(),
+            },
+            BvhNode::Branch { left, right, .. } => {
+                let left_stats = left.stats();
+                let right_stats = right.stats();
+                BvhStats {
+                    node_count: 1 + left_stats.node_count + right_stats.node_count,
+                    branch_count: 1 + left_stats.branch_count + right_stats.branch_count,
+                    leaf_count: left_stats.leaf_count + right_stats.leaf_count,
+                    primitive_count: left_stats.primitive_count + right_stats.primitive_count,
+                    max_depth: 1 + left_stats.max_depth.max(right_stats.max_depth),
+                    max_leaf_size: left_stats
+                        .max_leaf_size
+                        .max(right_stats.max_leaf_size),
+                }
+            }
         }
     }
 }
@@ -233,6 +286,10 @@ impl Hittable for BvhNode {
 
     fn bounding_box(&self) -> Aabb {
         self.bbox()
+    }
+
+    fn bvh_stats(&self) -> Option<BvhStats> {
+        Some(self.stats())
     }
 }
 
@@ -374,6 +431,45 @@ mod tests {
 
         assert!(!bvh.any_hit(&ray, 0.001, 5.0));
         assert!(bvh.any_hit(&ray, 0.001, 10.0));
+    }
+
+    #[test]
+    fn bvh_stats_counts_nodes_for_five_spheres() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![
+            make_sphere((-3.0, 0.0, 0.0), 1.0),
+            make_sphere((0.0, 0.0, 0.0), 1.0),
+            make_sphere((3.0, 0.0, 0.0), 1.0),
+            make_sphere((0.0, 2.5, 0.0), 0.5),
+            make_sphere((-1.5, -2.0, 1.0), 0.75),
+        ];
+        let bvh = BvhNode::build(objects);
+        let stats = bvh.stats();
+
+        assert_eq!(stats.primitive_count, 5);
+        assert!(stats.branch_count >= 1);
+        assert!(stats.leaf_count >= 2);
+        assert_eq!(stats.node_count, stats.branch_count + stats.leaf_count);
+        assert!(stats.max_depth >= 2);
+        assert!(stats.max_leaf_size <= 2);
+        assert_eq!(bvh.bvh_stats(), Some(stats));
+    }
+
+    #[test]
+    fn bvh_stats_single_leaf_for_two_spheres() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![
+            make_sphere((-1.0, 0.0, 0.0), 1.0),
+            make_sphere((1.0, 0.0, 0.0), 1.0),
+        ];
+        let stats = BvhNode::build(objects).stats();
+
+        assert_eq!(stats, BvhStats {
+            node_count: 1,
+            branch_count: 0,
+            leaf_count: 1,
+            primitive_count: 2,
+            max_depth: 1,
+            max_leaf_size: 2,
+        });
     }
 
     #[test]

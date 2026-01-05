@@ -22,6 +22,11 @@ pub trait Hittable: Send + Sync {
     fn any_hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> bool {
         self.hit(ray, t_min, t_max).is_some()
     }
+
+    /// When this hittable wraps a built BVH, return tree statistics for debugging.
+    fn bvh_stats(&self) -> Option<crate::bvh::BvhStats> {
+        None
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

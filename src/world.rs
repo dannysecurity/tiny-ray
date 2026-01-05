@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::bvh::BvhNode;
+use crate::bvh::{BvhNode, BvhStats};
 use crate::hittable::{Aabb, HitRecord, Hittable};
 use crate::intersection::{any_hit_in_objects, closest_hit, closest_hit_in_objects};
 use crate::ray::Ray;
@@ -73,6 +73,10 @@ impl Hittable for SceneWorld {
                 Aabb::surrounding_box(&boxes)
             }
         }
+    }
+
+    fn bvh_stats(&self) -> Option<BvhStats> {
+        self.bounded.as_ref().and_then(|bounded| bounded.bvh_stats())
     }
 }
 
@@ -177,6 +181,27 @@ mod tests {
                 _ => panic!("world hit {:?} != brute force {:?}", actual, expected),
             }
         }
+    }
+
+    #[test]
+    fn scene_world_bvh_stats_delegates_to_bounded_tree() {
+        let world = SceneWorld::assemble(
+            vec![
+                sphere_at((-2.0, 0.0, 0.0)),
+                sphere_at((0.0, 0.0, 0.0)),
+                sphere_at((2.0, 0.0, 0.0)),
+            ],
+            vec![Arc::new(floor_plane())],
+        );
+        let stats = world.bvh_stats().expect("multi-sphere scene should expose BVH stats");
+        assert_eq!(stats.primitive_count, 3);
+        assert!(stats.branch_count >= 1);
+    }
+
+    #[test]
+    fn assemble_single_sphere_has_no_bvh_stats() {
+        let world = SceneWorld::assemble(vec![sphere_at((0.0, 0.0, 0.0))], vec![]);
+        assert!(world.bvh_stats().is_none());
     }
 
     #[test]

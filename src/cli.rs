@@ -29,6 +29,7 @@ Options:
       --tone-map MODE   Override HDR tone mapping: none, reinhard, or aces
       --aa MODE         Override anti-aliasing: random, stratified, or halton
       --filter MODE     Override pixel reconstruction filter: box, gaussian, or mitchell
+      --bvh-stats       Print BVH node counts after scene build (bounded geometry only)
   -h, --help            Show this help message
 
 Examples:
@@ -53,6 +54,7 @@ pub struct CliOptions {
     pub tone_map: Option<ToneMapping>,
     pub aa: Option<AntiAliasing>,
     pub filter: Option<PixelFilter>,
+    pub bvh_stats: bool,
 }
 
 impl CliOptions {
@@ -78,6 +80,7 @@ impl CliOptions {
         let mut tone_map = None;
         let mut aa = None;
         let mut filter = None;
+        let mut bvh_stats = false;
 
         while let Some(arg) = args.next() {
             let arg = arg.as_ref();
@@ -148,6 +151,9 @@ impl CliOptions {
                 "--filter" => {
                     filter = Some(parse_filter(&next_value(&mut args, arg)?)?);
                 }
+                "--bvh-stats" => {
+                    bvh_stats = true;
+                }
                 value if value.starts_with('-') => {
                     return Err(format!("unknown option: {value}"));
                 }
@@ -173,6 +179,7 @@ impl CliOptions {
             tone_map,
             aa,
             filter,
+            bvh_stats,
         })
     }
 
@@ -299,6 +306,7 @@ mod tests {
         assert_eq!(options.aa, None);
         assert_eq!(options.filter, None);
         assert_eq!(options.format, None);
+        assert!(!options.bvh_stats);
     }
 
     #[test]
@@ -377,6 +385,13 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_accepts_bvh_stats_flag() {
+        let options =
+            CliOptions::parse_from(["--bvh-stats", "scenes/studio.ron"]).unwrap();
+        assert!(options.bvh_stats);
+    }
+
+    #[test]
     fn parse_args_accepts_scene_and_overrides() {
         let options = CliOptions::parse_from([
             "--output",
@@ -436,6 +451,7 @@ mod tests {
             tone_map: Some(ToneMapping::Reinhard),
             aa: Some(AntiAliasing::Stratified),
             filter: Some(PixelFilter::Gaussian),
+            bvh_stats: false,
         };
         options.apply_to_scene(&mut scene);
         assert_eq!(scene.render.output, "override.png");

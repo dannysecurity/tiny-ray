@@ -47,5 +47,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Scene::from_scene_file(file)
     };
 
+    if options.bvh_stats {
+        match scene.world.bvh_stats() {
+            Some(stats) => eprintln!("{}", stats.format_summary()),
+            None => eprintln!("BVH: not built (single bounded primitive or planes only)"),
+        }
+    }
+
     renderer::render(&scene)
 }

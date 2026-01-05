@@ -42,6 +42,7 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--tone-map MODE` | HDR tone mapping before gamma: `none` (default), `reinhard`, or `aces` |
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
 | `--filter MODE` | Pixel reconstruction filter: `box` (default), `gaussian`, or `mitchell` |
+| `--bvh-stats` | Print BVH node, leaf, and primitive counts after loading the scene |
 | `-h`, `--help` | Print usage |
 
 ## Example render: starter demo
