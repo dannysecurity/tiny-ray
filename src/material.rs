@@ -30,14 +30,14 @@ impl Material {
                 Some((*albedo, scattered))
             }
             Material::Metal { albedo, fuzz } => {
-                let reflected = ray_in.direction.normalize().reflect(hit.normal);
-                let scattered = Ray::new(
-                    hit.point,
-                    reflected + *fuzz * Vec3::random_in_unit_sphere(rng),
-                    ray_in.time,
-                );
-                if scattered.direction.dot(hit.normal) > 0.0 {
-                    Some((*albedo, scattered))
+                let fuzz = fuzz.clamp(0.0, 1.0);
+                let mut direction = ray_in.direction.normalize().reflect(hit.normal);
+                if fuzz > 0.0 {
+                    direction =
+                        (direction + fuzz * Vec3::random_in_unit_sphere(rng)).normalize();
+                }
+                if direction.dot(hit.normal) > 0.0 {
+                    Some((*albedo, Ray::new(hit.point, direction, ray_in.time)))
                 } else {
                     None
                 }
@@ -212,6 +212,73 @@ mod tests {
             0.0,
         );
         assert!(color.x > 0.0 || color.y > 0.0 || color.z > 0.0);
+    }
+
+    #[test]
+    fn emitted_scales_color_by_intensity() {
+        let material = Material::Emissive {
+            color: Color::new(1.0, 0.5, 0.25),
+            intensity: 3.0,
+        };
+        assert!(material.is_emissive());
+        assert_eq!(material.emitted(), Color::new(3.0, 1.5, 0.75));
+    }
+
+    #[test]
+    fn emissive_scatter_returns_none() {
+        let material = Material::Emissive {
+            color: Color::new(1.0, 1.0, 1.0),
+            intensity: 1.0,
+        };
+        let hit = hit_on_y_up_normal();
+        let ray = ray_from((0.0, -1.0, 0.0), (0.0, 1.0, 0.0));
+        let mut rng = StdRng::seed_from_u64(4);
+        assert!(material.scatter(&mut rng, &ray, &hit).is_none());
+    }
+
+    #[test]
+    fn metal_scatter_rejects_reflection_below_surface() {
+        let material = Material::Metal {
+            albedo: Color::new(0.8, 0.8, 0.8),
+            fuzz: 0.0,
+        };
+        let hit = hit_on_y_up_normal();
+        let ray = ray_from((0.0, -1.0, 0.0), (0.0, 1.0, 0.0));
+        let mut rng = StdRng::seed_from_u64(5);
+        assert!(material.scatter(&mut rng, &ray, &hit).is_none());
+    }
+
+    #[test]
+    fn metal_scatter_clamps_excessive_fuzz() {
+        let material = Material::Metal {
+            albedo: Color::new(0.8, 0.8, 0.8),
+            fuzz: 5.0,
+        };
+        let hit = hit_on_y_up_normal();
+        let ray = ray_from((0.0, 1.0, 0.0), (0.0, -1.0, 0.0));
+        let mut rng = StdRng::seed_from_u64(6);
+        let (_, scattered) = material
+            .scatter(&mut rng, &ray, &hit)
+            .expect("clamped fuzz should still produce a scatter");
+        assert!(
+            (scattered.direction.length() - 1.0).abs() < 1e-9,
+            "fuzzy metal scatter should return a unit direction"
+        );
+    }
+
+    #[test]
+    fn lambertian_scatter_returns_albedo_and_outward_ray() {
+        let albedo = Color::new(0.7, 0.3, 0.1);
+        let material = Material::Lambertian { albedo };
+        let hit = hit_on_y_up_normal();
+        let ray = ray_from((0.0, 1.0, 0.0), (0.0, -1.0, 0.0));
+        let mut rng = StdRng::seed_from_u64(8);
+
+        let (attenuation, scattered) = material
+            .scatter(&mut rng, &ray, &hit)
+            .expect("lambertian should always scatter");
+        assert_eq!(attenuation, albedo);
+        assert!(scattered.direction.dot(hit.normal) > 0.0);
     }
 
     #[test]
