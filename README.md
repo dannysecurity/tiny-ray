@@ -40,7 +40,8 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--color-space MODE` | Scene color interpretation: `linear` (default) or `srgb` |
 | `--exposure F` | Linear exposure multiplier applied before gamma encoding |
 | `--tone-map MODE` | HDR tone mapping before gamma: `none` (default), `reinhard`, or `aces` |
-| `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, or `halton` |
+| `--dither MODE` | 8-bit quantization dither: `none` (default) or `bayer8x8` |
+| `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, `halton`, or `r2` |
 | `--filter MODE` | Pixel reconstruction filter: `box` (default), `gaussian`, or `mitchell` |
 | `--bvh-stats` | Print BVH node, leaf, and primitive counts after loading the scene |
 | `-h`, `--help` | Print usage |
@@ -480,10 +481,11 @@ Materials use an externally tagged enum in JSON and YAML (`"Lambertian": { "albe
 | `color_space` | `linear` | Input interpretation for material albedos, emissive colors, and sky: `linear` or `srgb` |
 | `exposure` | `1.0` | Linear exposure multiplier before tone mapping and gamma encoding |
 | `tone_map` | `none` | HDR compression before gamma: `none`, `reinhard`, or `aces` |
-| `aa` | `random` | Sub-pixel sampling: `random`, `stratified`, or `halton` |
+| `aa` | `random` | Sub-pixel sampling: `random`, `stratified`, `halton`, or `r2` |
 | `filter` | `box` | Pixel reconstruction filter: `box`, `gaussian`, or `mitchell` |
+| `dither` | `none` | 8-bit quantization: `none` or `bayer8x8` (ordered dither reduces gradient banding) |
 
-Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure, optional tone mapping, and gamma when writing 8-bit PNG pixels. Set `color_space: srgb` when authoring albedos in display space (common in DCC tools); pair with `gamma: srgb` for a display-correct round trip. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For HDR scenes with bright emissive lights, try ACES filmic tone mapping (`--tone-map aces`). For faster convergence at low sample counts, try Halton quasi-random offsets (`--aa halton`).
+Tracing accumulates linear radiance; sub-pixel samples are weighted by the chosen reconstruction filter before averaging. The color pipeline applies exposure, optional tone mapping, gamma encoding, and optional Bayer dither when writing 8-bit PNG pixels. Set `color_space: srgb` when authoring albedos in display space (common in DCC tools); pair with `gamma: srgb` for a display-correct round trip. Enable `dither: bayer8x8` with `gamma: srgb` to break up banding in smooth gradients at low sample counts. The studio scene uses sRGB output with stratified anti-aliasing and a Mitchell filter for sharper edge reconstruction. For faster convergence at low sample counts, try Halton or R2 quasi-random offsets (`--aa halton` or `--aa r2`). For HDR scenes with bright emissive lights, try ACES filmic tone mapping (`--tone-map aces`).
 
 ```ron
 render: (
@@ -497,6 +499,7 @@ render: (
     exposure: 1.0,
     aa: stratified,
     filter: mitchell,
+    dither: bayer8x8,
 ),
 ```
 

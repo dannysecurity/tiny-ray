@@ -4,6 +4,7 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::color::{GammaEncoding, InputColorSpace, ToneMapping};
+use crate::dither::DitherMode;
 use crate::film::PixelFilter;
 use crate::sampling::AntiAliasing;
 use crate::scene::{Scene, SceneFormat};
@@ -27,7 +28,8 @@ Options:
       --color-space MODE  Override scene color interpretation: linear or srgb
       --exposure F      Override linear exposure multiplier (default 1.0)
       --tone-map MODE   Override HDR tone mapping: none, reinhard, or aces
-      --aa MODE         Override anti-aliasing: random, stratified, or halton
+      --dither MODE     Override 8-bit quantization dither: none or bayer8x8
+      --aa MODE         Override anti-aliasing: random, stratified, halton, or r2
       --filter MODE     Override pixel reconstruction filter: box, gaussian, or mitchell
       --bvh-stats       Print BVH node counts after scene build (bounded geometry only)
   -h, --help            Show this help message
@@ -52,6 +54,7 @@ pub struct CliOptions {
     pub color_space: Option<InputColorSpace>,
     pub exposure: Option<f64>,
     pub tone_map: Option<ToneMapping>,
+    pub dither: Option<DitherMode>,
     pub aa: Option<AntiAliasing>,
     pub filter: Option<PixelFilter>,
     pub bvh_stats: bool,
@@ -78,6 +81,7 @@ impl CliOptions {
         let mut color_space = None;
         let mut exposure = None;
         let mut tone_map = None;
+        let mut dither = None;
         let mut aa = None;
         let mut filter = None;
         let mut bvh_stats = false;
@@ -145,6 +149,9 @@ impl CliOptions {
                 "--tone-map" => {
                     tone_map = Some(parse_tone_map(&next_value(&mut args, arg)?)?);
                 }
+                "--dither" => {
+                    dither = Some(parse_dither(&next_value(&mut args, arg)?)?);
+                }
                 "--aa" => {
                     aa = Some(parse_aa(&next_value(&mut args, arg)?)?);
                 }
@@ -177,6 +184,7 @@ impl CliOptions {
             color_space,
             exposure,
             tone_map,
+            dither,
             aa,
             filter,
             bvh_stats,
@@ -208,6 +216,9 @@ impl CliOptions {
         }
         if let Some(tone_map) = self.tone_map {
             render.tone_map = tone_map;
+        }
+        if let Some(dither) = self.dither {
+            render.dither = dither;
         }
         if let Some(aa) = self.aa {
             render.aa = aa;
@@ -266,13 +277,24 @@ fn parse_filter(value: &str) -> Result<PixelFilter, String> {
     }
 }
 
+fn parse_dither(value: &str) -> Result<DitherMode, String> {
+    match value {
+        "none" => Ok(DitherMode::None),
+        "bayer8x8" => Ok(DitherMode::Bayer8x8),
+        _ => Err(format!(
+            "invalid dither mode: {value} (expected none or bayer8x8)"
+        )),
+    }
+}
+
 fn parse_aa(value: &str) -> Result<AntiAliasing, String> {
     match value {
         "random" => Ok(AntiAliasing::Random),
         "stratified" => Ok(AntiAliasing::Stratified),
         "halton" => Ok(AntiAliasing::Halton),
+        "r2" => Ok(AntiAliasing::R2),
         _ => Err(format!(
-            "invalid aa mode: {value} (expected random, stratified, or halton)"
+            "invalid aa mode: {value} (expected random, stratified, halton, or r2)"
         )),
     }
 }
@@ -303,6 +325,7 @@ mod tests {
         assert_eq!(options.color_space, None);
         assert_eq!(options.exposure, None);
         assert_eq!(options.tone_map, None);
+        assert_eq!(options.dither, None);
         assert_eq!(options.aa, None);
         assert_eq!(options.filter, None);
         assert_eq!(options.format, None);
@@ -371,6 +394,24 @@ mod tests {
     #[test]
     fn parse_args_rejects_unknown_filter() {
         assert!(CliOptions::parse_from(["--filter", "lanczos"]).is_err());
+    }
+
+    #[test]
+    fn parse_args_accepts_dither_override() {
+        let options =
+            CliOptions::parse_from(["--dither", "bayer8x8", "scenes/demo.ron"]).unwrap();
+        assert_eq!(options.dither, Some(DitherMode::Bayer8x8));
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_dither() {
+        assert!(CliOptions::parse_from(["--dither", "floyd"]).is_err());
+    }
+
+    #[test]
+    fn parse_args_accepts_r2_aa() {
+        let options = CliOptions::parse_from(["--aa", "r2", "scenes/demo.ron"]).unwrap();
+        assert_eq!(options.aa, Some(AntiAliasing::R2));
     }
 
     #[test]
@@ -449,6 +490,7 @@ mod tests {
             color_space: Some(InputColorSpace::Srgb),
             exposure: Some(0.8),
             tone_map: Some(ToneMapping::Reinhard),
+            dither: Some(DitherMode::Bayer8x8),
             aa: Some(AntiAliasing::Stratified),
             filter: Some(PixelFilter::Gaussian),
             bvh_stats: false,
@@ -462,6 +504,7 @@ mod tests {
         assert_eq!(scene.render.color_space, InputColorSpace::Srgb);
         assert_eq!(scene.render.exposure, 0.8);
         assert_eq!(scene.render.tone_map, ToneMapping::Reinhard);
+        assert_eq!(scene.render.dither, DitherMode::Bayer8x8);
         assert_eq!(scene.render.aa, AntiAliasing::Stratified);
         assert_eq!(scene.render.filter, PixelFilter::Gaussian);
     }

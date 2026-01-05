@@ -7,10 +7,14 @@ mod intersection_suite;
 #[cfg(test)]
 mod vec3_suite;
 
+#[cfg(test)]
+mod renderer_tests;
+
 mod bvh;
 mod camera;
 mod cli;
 mod color;
+mod dither;
 mod film;
 mod hittable;
 mod intersection;

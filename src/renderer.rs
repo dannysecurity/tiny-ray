@@ -48,6 +48,7 @@ impl<'a> RenderContext<'a> {
                 gamma: scene.render.gamma,
                 exposure: scene.render.exposure,
                 tone_map: scene.render.tone_map,
+                dither: scene.render.dither,
             },
             tracer: PathTracer::new(
                 scene.world.as_ref(),
@@ -59,7 +60,7 @@ impl<'a> RenderContext<'a> {
 
     fn log_banner(&self) {
         eprintln!(
-            "Rendering {}x{} ({} spp, depth {}, color_space {:?}, gamma {:?}, tone_map {:?}, aa {:?}, filter {:?})",
+            "Rendering {}x{} ({} spp, depth {}, color_space {:?}, gamma {:?}, tone_map {:?}, dither {:?}, aa {:?}, filter {:?})",
             self.width,
             self.height,
             self.samples_per_pixel,
@@ -67,6 +68,7 @@ impl<'a> RenderContext<'a> {
             self.color_space,
             self.pipeline.gamma,
             self.pipeline.tone_map,
+            self.pipeline.dither,
             self.aa,
             self.filter,
         );
@@ -100,7 +102,7 @@ pub fn render(scene: &Scene) -> Result<(), Box<dyn std::error::Error>> {
         }
         for x in 0..ctx.width {
             let pixel = ctx.trace_pixel(&mut rng, x, y);
-            buffer.put_pixel(x, y, ctx.pipeline.encode_pixel(pixel));
+            buffer.put_pixel(x, y, ctx.pipeline.encode_pixel(pixel, x, y));
         }
     }
 

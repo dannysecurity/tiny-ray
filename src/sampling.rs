@@ -11,6 +11,8 @@ pub enum AntiAliasing {
     Stratified,
     /// Halton quasi-random sequence (bases 2 and 3); low-discrepancy offsets.
     Halton,
+    /// Roberts R2 low-discrepancy sequence; fast quasi-random offsets with good 2D coverage.
+    R2,
 }
 
 impl Default for AntiAliasing {
@@ -30,7 +32,17 @@ pub fn pixel_offsets<R: Rng + ?Sized>(
         AntiAliasing::Random => (rng.gen(), rng.gen()),
         AntiAliasing::Stratified => stratified_offset(sample_index, samples_per_pixel, rng),
         AntiAliasing::Halton => halton_offset(sample_index),
+        AntiAliasing::R2 => r2_offset(sample_index),
     }
+}
+
+/// Roberts R2 sequence constants (Martin Roberts, 2018).
+const R2_G1: f64 = 0.7548776662466927;
+const R2_G2: f64 = 0.5698404659933789;
+
+fn r2_offset(sample_index: u32) -> (f64, f64) {
+    let n = (sample_index + 1) as f64;
+    ((n * R2_G1).fract(), (n * R2_G2).fract())
 }
 
 /// Halton sequence sample in [0, 1) for 1-based `index` and prime `base`.
@@ -166,5 +178,45 @@ mod tests {
         assert!((halton(1, 2) - 0.5).abs() < 1e-12);
         assert!((halton(2, 2) - 0.25).abs() < 1e-12);
         assert!((halton(1, 3) - 1.0 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn r2_offsets_stay_inside_pixel() {
+        let mut rng = StdRng::seed_from_u64(0);
+        for sample in 0..64 {
+            let (du, dv) = pixel_offsets(sample, 64, AntiAliasing::R2, &mut rng);
+            assert!((0.0..1.0).contains(&du));
+            assert!((0.0..1.0).contains(&dv));
+        }
+    }
+
+    #[test]
+    fn r2_is_deterministic_and_independent_of_rng() {
+        let mut rng_a = StdRng::seed_from_u64(1);
+        let mut rng_b = StdRng::seed_from_u64(99);
+        for sample in 0..16 {
+            let a = pixel_offsets(sample, 16, AntiAliasing::R2, &mut rng_a);
+            let b = pixel_offsets(sample, 16, AntiAliasing::R2, &mut rng_b);
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn r2_samples_are_unique_for_small_counts() {
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut offsets = Vec::new();
+        for sample in 0..16 {
+            offsets.push(pixel_offsets(sample, 16, AntiAliasing::R2, &mut rng));
+        }
+        offsets.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        offsets.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-12 && (a.1 - b.1).abs() < 1e-12);
+        assert_eq!(offsets.len(), 16);
+    }
+
+    #[test]
+    fn r2_first_sample_matches_known_values() {
+        let (du, dv) = r2_offset(0);
+        assert!((du - R2_G1).abs() < 1e-12);
+        assert!((dv - R2_G2).abs() < 1e-12);
     }
 }

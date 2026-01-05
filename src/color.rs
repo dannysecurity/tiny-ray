@@ -1,6 +1,7 @@
 use image::Rgb;
 use serde::Deserialize;
 
+use crate::dither::DitherMode;
 use crate::vec3::Color;
 
 /// HDR-to-display compression applied after exposure and before gamma encoding.
@@ -61,6 +62,7 @@ pub struct ColorPipeline {
     pub gamma: GammaEncoding,
     pub exposure: f64,
     pub tone_map: ToneMapping,
+    pub dither: DitherMode,
 }
 
 impl Default for ColorPipeline {
@@ -69,6 +71,7 @@ impl Default for ColorPipeline {
             gamma: GammaEncoding::default(),
             exposure: 1.0,
             tone_map: ToneMapping::default(),
+            dither: DitherMode::default(),
         }
     }
 }
@@ -100,13 +103,13 @@ impl ColorPipeline {
         }
     }
 
-    pub fn encode_pixel(&self, color: Color) -> Rgb<u8> {
+    pub fn encode_pixel(&self, color: Color, x: u32, y: u32) -> Rgb<u8> {
         let exposed = self.apply_exposure(color);
         let mapped = self.apply_tone_map(exposed);
         Rgb([
-            encode_channel(mapped.x, self.gamma),
-            encode_channel(mapped.y, self.gamma),
-            encode_channel(mapped.z, self.gamma),
+            encode_channel(mapped.x, self.gamma, self.dither, x, y, 0),
+            encode_channel(mapped.y, self.gamma, self.dither, x, y, 1),
+            encode_channel(mapped.z, self.gamma, self.dither, x, y, 2),
         ])
     }
 }
@@ -144,16 +147,22 @@ fn sanitize_component(value: f64) -> f64 {
     }
 }
 
-fn encode_channel(linear: f64, gamma: GammaEncoding) -> u8 {
+fn encode_channel(
+    linear: f64,
+    gamma: GammaEncoding,
+    dither: DitherMode,
+    x: u32,
+    y: u32,
+    channel: u8,
+) -> u8 {
     let linear = linear.max(0.0);
     let encoded = match gamma {
         GammaEncoding::Gamma2 => linear.sqrt(),
         GammaEncoding::Srgb => linear_to_srgb(linear),
         GammaEncoding::Linear => linear,
     };
-    (encoded.clamp(0.0, 1.0) * 255.0)
-        .clamp(0.0, 255.0)
-        .round() as u8
+    let scaled = encoded.clamp(0.0, 1.0) * 255.0;
+    dither.quantize(scaled, x, y, channel)
 }
 
 /// Convert a linear light intensity in [0, 1] to sRGB display space.
@@ -226,8 +235,9 @@ mod tests {
             gamma: GammaEncoding::Gamma2,
             exposure: 1.0,
             tone_map: ToneMapping::None,
+            dither: DitherMode::None,
         };
-        let pixel = pipeline.encode_pixel(Color::new(0.25, 0.25, 0.25));
+        let pixel = pipeline.encode_pixel(Color::new(0.25, 0.25, 0.25), 0, 0);
         assert_eq!(pixel.0, [128, 128, 128]);
     }
 
@@ -237,8 +247,9 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 2.0,
             tone_map: ToneMapping::None,
+            dither: DitherMode::None,
         };
-        let pixel = pipeline.encode_pixel(Color::new(0.25, 0.0, 0.0));
+        let pixel = pipeline.encode_pixel(Color::new(0.25, 0.0, 0.0), 0, 0);
         assert_eq!(pixel.0[0], 128);
     }
 
@@ -254,8 +265,9 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
             tone_map: ToneMapping::None,
+            dither: DitherMode::None,
         };
-        let pixel = pipeline.encode_pixel(Color::new(2.0, -1.0, 0.5));
+        let pixel = pipeline.encode_pixel(Color::new(2.0, -1.0, 0.5), 0, 0);
         assert_eq!(pixel.0, [255, 0, 128]);
     }
 
@@ -266,8 +278,9 @@ mod tests {
                 gamma,
                 exposure: 1.0,
                 tone_map: ToneMapping::None,
+                dither: DitherMode::None,
             };
-            let pixel = pipeline.encode_pixel(Color::new(1.0, 1.0, 1.0));
+            let pixel = pipeline.encode_pixel(Color::new(1.0, 1.0, 1.0), 0, 0);
             assert_eq!(pixel.0, [255, 255, 255], "gamma {:?}", gamma);
         }
     }
@@ -284,8 +297,9 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
             tone_map: ToneMapping::None,
+            dither: DitherMode::None,
         };
-        let pixel = pipeline.encode_pixel(Color::new(f64::NAN, 0.5, f64::INFINITY));
+        let pixel = pipeline.encode_pixel(Color::new(f64::NAN, 0.5, f64::INFINITY), 0, 0);
         assert_eq!(pixel.0, [0, 128, 0]);
     }
 
@@ -295,8 +309,9 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
             tone_map: ToneMapping::Reinhard,
+            dither: DitherMode::None,
         };
-        let pixel = pipeline.encode_pixel(Color::new(4.0, 0.0, 0.0));
+        let pixel = pipeline.encode_pixel(Color::new(4.0, 0.0, 0.0), 0, 0);
         assert_eq!(pixel.0[0], 204);
     }
 
@@ -306,6 +321,7 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
             tone_map: ToneMapping::Reinhard,
+            dither: DitherMode::None,
         };
         let mapped = pipeline.apply_tone_map(Color::new(0.25, 0.5, 0.75));
         assert!((mapped.x - 0.2).abs() < 1e-12);
@@ -319,6 +335,7 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 1.0,
             tone_map: ToneMapping::Aces,
+            dither: DitherMode::None,
         };
         let mapped = pipeline.apply_tone_map(Color::new(1.0, 1.0, 1.0));
         assert!(mapped.x < 1.0);
@@ -331,8 +348,22 @@ mod tests {
             gamma: GammaEncoding::Linear,
             exposure: 2.0,
             tone_map: ToneMapping::Reinhard,
+            dither: DitherMode::None,
         };
         let mapped = pipeline.apply_tone_map(pipeline.apply_exposure(Color::new(1.0, 0.0, 0.0)));
         assert!((mapped.x - 2.0 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn bayer_dither_spreads_quantization_at_same_radiance() {
+        let pipeline = ColorPipeline {
+            gamma: GammaEncoding::Linear,
+            exposure: 1.0,
+            tone_map: ToneMapping::None,
+            dither: DitherMode::Bayer8x8,
+        };
+        let center = pipeline.encode_pixel(Color::new(0.502, 0.502, 0.502), 4, 4);
+        let neighbor = pipeline.encode_pixel(Color::new(0.502, 0.502, 0.502), 5, 4);
+        assert!(center.0[0] != neighbor.0[0] || center.0[1] != neighbor.0[1]);
     }
 }

@@ -279,6 +279,7 @@ fn load_scene_resolved(
 mod tests {
     use super::*;
     use crate::color::{GammaEncoding, InputColorSpace, ToneMapping};
+    use crate::dither::DitherMode;
     use crate::film::PixelFilter;
     use crate::sampling::AntiAliasing;
 
@@ -441,6 +442,7 @@ objects:
         assert_eq!(scene.render.filter, PixelFilter::Box);
         assert_eq!(scene.render.tone_map, ToneMapping::None);
         assert_eq!(scene.render.color_space, InputColorSpace::Linear);
+        assert_eq!(scene.render.dither, DitherMode::None);
     }
 
     #[test]
@@ -522,6 +524,33 @@ objects:
         assert_eq!(scene.render.exposure, 1.25);
         assert_eq!(scene.render.aa, AntiAliasing::Stratified);
         assert_eq!(scene.render.filter, PixelFilter::Gaussian);
+    }
+
+    #[test]
+    fn render_desc_parses_dither_and_r2_aa() {
+        let json = r#"{
+            "camera": {
+                "lookfrom": [0.0, 0.0, 5.0],
+                "lookat": [0.0, 0.0, 0.0],
+                "vup": [0.0, 1.0, 0.0],
+                "vfov": 45.0,
+                "aperture": 0.0,
+                "focus_distance": 1.0
+            },
+            "render": {
+                "width": 32,
+                "height": 32,
+                "samples_per_pixel": 16,
+                "max_depth": 4,
+                "output": "dithered.png",
+                "dither": "bayer8x8",
+                "aa": "r2"
+            },
+            "objects": []
+        }"#;
+        let scene = SceneFormat::Json.parse(json).unwrap();
+        assert_eq!(scene.render.dither, DitherMode::Bayer8x8);
+        assert_eq!(scene.render.aa, AntiAliasing::R2);
     }
 
     #[test]

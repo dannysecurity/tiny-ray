@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 
 use crate::color::{decode_scene_color, GammaEncoding, InputColorSpace, ToneMapping};
+use crate::dither::DitherMode;
 use crate::film::PixelFilter;
 use crate::material::Material;
 use crate::sampling::AntiAliasing;
@@ -54,6 +55,8 @@ pub struct RenderDesc {
     pub tone_map: ToneMapping,
     #[serde(default)]
     pub color_space: InputColorSpace,
+    #[serde(default)]
+    pub dither: DitherMode,
 }
 
 fn default_exposure() -> f64 {
