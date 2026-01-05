@@ -4,6 +4,9 @@ mod geometry_tests;
 #[cfg(test)]
 mod intersection_suite;
 
+#[cfg(test)]
+mod vec3_suite;
+
 mod bvh;
 mod camera;
 mod cli;

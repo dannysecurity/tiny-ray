@@ -117,4 +117,63 @@ mod tests {
         let ray = ray_from((0.0, 0.0, 0.0), (0.0, 0.0, 1.0));
         assert!(closest_hit_in_objects(&[], &ray, 0.001, f64::INFINITY).is_none());
     }
+
+    #[test]
+    fn closest_hit_returns_none_when_both_miss() {
+        assert!(closest_hit(None, None).is_none());
+    }
+
+    #[test]
+    fn closest_hit_equal_t_prefers_left_operand() {
+        let material = test_material();
+        let left = HitRecord {
+            point: Point3::new(1.0, 0.0, 0.0),
+            normal: Point3::new(0.0, 1.0, 0.0),
+            t: 3.0,
+            front_face: true,
+            material: Arc::clone(&material),
+        };
+        let right = HitRecord {
+            point: Point3::new(2.0, 0.0, 0.0),
+            normal: Point3::new(0.0, 1.0, 0.0),
+            t: 3.0,
+            front_face: true,
+            material,
+        };
+        let chosen = closest_hit(Some(left.clone()), Some(right)).unwrap();
+        assert_close(chosen.point.x, left.point.x);
+    }
+
+    #[test]
+    fn closest_hit_in_objects_is_order_independent() {
+        let near = unit_sphere_at((0.0, 0.0, 0.0), 1.0);
+        let far = unit_sphere_at((10.0, 0.0, 0.0), 1.0);
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+
+        let forward: Vec<Arc<dyn Hittable>> =
+            vec![Arc::new(near.clone()), Arc::new(far.clone())];
+        let reversed: Vec<Arc<dyn Hittable>> = vec![Arc::new(far), Arc::new(near)];
+
+        let a = closest_hit_in_objects(&forward, &ray, 0.001, f64::INFINITY).unwrap();
+        let b = closest_hit_in_objects(&reversed, &ray, 0.001, f64::INFINITY).unwrap();
+        assert_close(a.t, b.t);
+        assert_close(a.t, 4.0);
+    }
+
+    #[test]
+    fn any_hit_in_objects_returns_false_for_empty_scene() {
+        let ray = ray_from((0.0, 0.0, 0.0), (0.0, 0.0, 1.0));
+        assert!(!any_hit_in_objects(&[], &ray, 0.001, f64::INFINITY));
+    }
+
+    #[test]
+    fn closest_hit_in_objects_picks_near_sphere_when_spheres_overlap() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![
+            Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 2.0)),
+            Arc::new(unit_sphere_at((1.0, 0.0, 0.0), 1.0)),
+        ];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        let hit = closest_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY).unwrap();
+        assert_close(hit.t, 3.0);
+    }
 }

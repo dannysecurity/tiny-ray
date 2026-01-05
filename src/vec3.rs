@@ -46,6 +46,18 @@ impl Vec3 {
         self.x.abs() < 1e-8 && self.y.abs() < 1e-8 && self.z.abs() < 1e-8
     }
 
+    /// Component-wise approximate equality within `epsilon`.
+    pub fn approx_eq(self, other: Self, epsilon: f64) -> bool {
+        (self.x - other.x).abs() < epsilon
+            && (self.y - other.y).abs() < epsilon
+            && (self.z - other.z).abs() < epsilon
+    }
+
+    /// Linear interpolation: `(1 - t) * self + t * other`.
+    pub fn lerp(self, other: Self, t: f64) -> Self {
+        self * (1.0 - t) + other * t
+    }
+
     /// Component along axis index (0 = x, 1 = y, 2 = z).
     pub fn axis(self, index: usize) -> f64 {
         match index {
@@ -362,6 +374,23 @@ mod tests {
         let incident = Vec3::new(1.0, -1.0, 0.0).normalize();
         let normal = Vec3::new(0.0, 1.0, 0.0);
         assert_length_close(incident.reflect(normal), 1.0);
+    }
+
+    #[test]
+    fn approx_eq_respects_epsilon() {
+        let a = Vec3::new(1.0, 2.0, 3.0);
+        let b = Vec3::new(1.0 + 1e-10, 2.0, 3.0);
+        assert!(a.approx_eq(b, 1e-9));
+        assert!(!a.approx_eq(b, 1e-11));
+    }
+
+    #[test]
+    fn lerp_endpoints_and_midpoint() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let b = Vec3::new(10.0, 20.0, 30.0);
+        assert_vec3_close(a.lerp(b, 0.0), a);
+        assert_vec3_close(a.lerp(b, 1.0), b);
+        assert_vec3_close(a.lerp(b, 0.5), Vec3::new(5.0, 10.0, 15.0));
     }
 }
 

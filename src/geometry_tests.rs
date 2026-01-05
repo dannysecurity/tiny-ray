@@ -28,6 +28,29 @@ pub fn assert_length_close(v: Vec3, expected: f64) {
     assert_close(v.length(), expected);
 }
 
+pub fn assert_orthogonal(a: Vec3, b: Vec3) {
+    assert_close(a.dot(b), 0.0);
+}
+
+pub fn assert_parallel(a: Vec3, b: Vec3) {
+    let cross = a.cross(b);
+    assert!(
+        cross.near_zero(),
+        "expected parallel vectors, cross magnitude {}",
+        cross.length()
+    );
+}
+
+/// Fixed non-degenerate vectors for algebraic identity checks in `vec3_suite`.
+pub fn property_test_vectors() -> [Vec3; 4] {
+    [
+        Vec3::new(1.0, 2.0, 3.0),
+        Vec3::new(-2.0, 0.5, 1.0),
+        Vec3::new(0.3, -1.0, 4.0),
+        Vec3::new(2.0, -3.0, 0.5),
+    ]
+}
+
 pub fn test_material() -> Arc<Material> {
     Arc::new(Material::Lambertian {
         albedo: Color::new(0.5, 0.5, 0.5),

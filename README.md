@@ -539,6 +539,7 @@ sky: (
 ```
 src/
   vec3.rs       — vectors, colors, sampling helpers
+  vec3_suite.rs — algebraic property tests for Vec3 (test-only)
   ray.rs        — ray origin + direction
   sphere.rs     — sphere primitive
   plane.rs      — infinite plane primitive
@@ -560,6 +561,19 @@ src/
 scenes/         — example scene files (demo, studio, cornell, sunset, neon, modular cornell)
 scenes/fragments/ — reusable geometry fragments for include-based scenes
 ```
+
+## Testing
+
+The crate uses Rust's built-in test harness. Geometry and intersection logic is covered by inline module tests plus dedicated suites:
+
+```bash
+cargo test                    # run all unit tests
+cargo test vec3_suite         # Vec3 algebraic and geometric properties
+cargo test intersection       # shared closest/any-hit helpers
+cargo test intersection_suite # cross-primitive intersection scenarios
+```
+
+Shared fixtures and float assertions live in `geometry_tests.rs`; `vec3_suite.rs` exercises vector algebra identities (commutativity, triple products, Snell's law) and `intersection_suite.rs` validates sphere, plane, and BVH behavior against brute-force references.
 
 ## License
 
