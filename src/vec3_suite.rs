@@ -147,3 +147,22 @@ fn axis_aligned_vectors_select_correct_components() {
     assert_close(v.axis(1), 8.0);
     assert_close(v.axis(2), 9.0);
 }
+
+#[test]
+fn default_is_origin() {
+    assert_vec3_close(Vec3::default(), Vec3::new(0.0, 0.0, 0.0));
+}
+
+#[test]
+fn sub_is_inverse_of_add() {
+    let [a, b, _, _] = property_test_vectors();
+    assert_vec3_close((a + b) - b, a);
+}
+
+#[test]
+fn scalar_division_reverses_multiplication() {
+    for v in property_test_vectors() {
+        let s = 4.0;
+        assert_vec3_close((v * s) / s, v);
+    }
+}

@@ -176,4 +176,19 @@ mod tests {
         let hit = closest_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY).unwrap();
         assert_close(hit.t, 3.0);
     }
+
+    #[test]
+    fn closest_hit_in_objects_honors_t_min_when_near_hit_is_below_threshold() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0))];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        let hit = closest_hit_in_objects(&objects, &ray, 5.0, f64::INFINITY).unwrap();
+        assert_close(hit.t, 6.0);
+    }
+
+    #[test]
+    fn any_hit_in_objects_is_false_when_only_intersection_lies_beyond_t_max() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0))];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        assert!(!any_hit_in_objects(&objects, &ray, 0.001, 3.5));
+    }
 }
