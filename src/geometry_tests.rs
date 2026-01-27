@@ -28,6 +28,10 @@ pub fn assert_length_close(v: Vec3, expected: f64) {
     assert_close(v.length(), expected);
 }
 
+pub fn assert_unit(v: Vec3) {
+    assert_length_close(v, 1.0);
+}
+
 pub fn assert_orthogonal(a: Vec3, b: Vec3) {
     assert_close(a.dot(b), 0.0);
 }

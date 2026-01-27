@@ -191,4 +191,50 @@ mod tests {
         let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
         assert!(!any_hit_in_objects(&objects, &ray, 0.001, 3.5));
     }
+
+    fn hit_at(t: f64, x: f64) -> HitRecord {
+        HitRecord {
+            point: Point3::new(x, 0.0, 0.0),
+            normal: Point3::new(0.0, 1.0, 0.0),
+            t,
+            front_face: true,
+            material: test_material(),
+        }
+    }
+
+    #[test]
+    fn closest_hit_chains_to_minimum_t() {
+        let a = hit_at(5.0, 1.0);
+        let b = hit_at(2.0, 2.0);
+        let c = hit_at(8.0, 3.0);
+        let folded = closest_hit(closest_hit(Some(a), Some(b)), Some(c)).unwrap();
+        assert_close(folded.t, 2.0);
+        assert_close(folded.point.x, 2.0);
+    }
+
+    #[test]
+    fn closest_hit_in_objects_respects_t_max() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![
+            Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0)),
+            Arc::new(unit_sphere_at((10.0, 0.0, 0.0), 1.0)),
+        ];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        assert!(closest_hit_in_objects(&objects, &ray, 0.001, 3.5).is_none());
+        let hit = closest_hit_in_objects(&objects, &ray, 0.001, 5.0).unwrap();
+        assert_close(hit.t, 4.0);
+    }
+
+    #[test]
+    fn any_hit_matches_closest_hit_presence_for_same_interval() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![
+            Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0)),
+            Arc::new(unit_sphere_at((10.0, 0.0, 0.0), 1.0)),
+        ];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        for t_max in [3.5, 5.0, 10.0, f64::INFINITY] {
+            let blocked = any_hit_in_objects(&objects, &ray, 0.001, t_max);
+            let nearest = closest_hit_in_objects(&objects, &ray, 0.001, t_max);
+            assert_eq!(blocked, nearest.is_some());
+        }
+    }
 }

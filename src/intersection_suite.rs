@@ -8,7 +8,8 @@ use crate::geometry_tests::{
     ray_from, test_material, unit_sphere_at,
 };
 use crate::hittable::{Aabb, Hittable};
-use crate::intersection::{any_hit_in_objects, closest_hit_in_objects};
+use crate::intersection::{any_hit_in_objects, closest_hit, closest_hit_in_objects};
+use crate::hittable::HitRecord;
 use crate::plane::Plane;
 use crate::vec3::{Point3, Vec3};
 
@@ -207,6 +208,49 @@ fn mixed_scene_honors_t_max_when_searching_multiple_spheres() {
     assert!(closest_hit_in_objects(&objects, &ray, 0.001, 3.5).is_none());
     let hit = closest_hit_in_objects(&objects, &ray, 0.001, 10.0).unwrap();
     assert_close(hit.t, 4.0);
+}
+
+#[test]
+fn closest_hit_selects_minimum_t_among_three_records() {
+    let material = test_material();
+    let records = [
+        HitRecord {
+            point: Point3::new(1.0, 0.0, 0.0),
+            normal: Point3::new(0.0, 1.0, 0.0),
+            t: 6.0,
+            front_face: true,
+            material: Arc::clone(&material),
+        },
+        HitRecord {
+            point: Point3::new(2.0, 0.0, 0.0),
+            normal: Point3::new(0.0, 1.0, 0.0),
+            t: 2.5,
+            front_face: true,
+            material: Arc::clone(&material),
+        },
+        HitRecord {
+            point: Point3::new(3.0, 0.0, 0.0),
+            normal: Point3::new(0.0, 1.0, 0.0),
+            t: 4.0,
+            front_face: true,
+            material,
+        },
+    ];
+    let folded = closest_hit(
+        closest_hit(Some(records[0].clone()), Some(records[1].clone())),
+        Some(records[2].clone()),
+    )
+    .unwrap();
+    assert_close(folded.t, 2.5);
+    assert_vec3_close(folded.point, Point3::new(2.0, 0.0, 0.0));
+}
+
+#[test]
+fn closest_hit_in_objects_and_any_hit_agree_on_miss_ray() {
+    let objects = scene(vec![Arc::new(unit_sphere_at((-5.0, 0.0, 0.0), 1.0))]);
+    let ray = ray_from((0.0, 2.0, 0.0), (1.0, 0.0, 0.0));
+    assert!(closest_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY).is_none());
+    assert!(!any_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY));
 }
 
 #[test]

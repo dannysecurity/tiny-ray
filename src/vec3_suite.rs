@@ -1,8 +1,8 @@
 //! Algebraic and geometric property tests for [`Vec3`] and intersection invariants.
 
 use crate::geometry_tests::{
-    assert_close, assert_length_close, assert_orthogonal, assert_parallel, assert_vec3_close,
-    property_test_vectors, EPS,
+    assert_close, assert_length_close, assert_orthogonal, assert_parallel, assert_unit,
+    assert_vec3_close, property_test_vectors, EPS,
 };
 use crate::vec3::Vec3;
 
@@ -165,4 +165,55 @@ fn scalar_division_reverses_multiplication() {
         let s = 4.0;
         assert_vec3_close((v * s) / s, v);
     }
+}
+
+#[test]
+fn lagrange_identity_links_dot_and_cross() {
+    for [a, b, _, _] in [property_test_vectors()] {
+        let cross_len_sq = a.cross(b).length_squared();
+        let dot_sq = a.dot(b).powi(2);
+        let expected = a.length_squared() * b.length_squared();
+        assert_close(cross_len_sq + dot_sq, expected);
+    }
+}
+
+#[test]
+fn cross_magnitude_matches_sine_of_angle() {
+    let a = Vec3::new(3.0, 0.0, 0.0);
+    let b = Vec3::new(0.0, 4.0, 0.0);
+    assert_close(a.cross(b).length(), a.length() * b.length());
+}
+
+#[test]
+fn reflect_twice_restores_incident_along_unit_normal() {
+    let incident = Vec3::new(0.6, -0.8, 0.2);
+    let normal = Vec3::new(0.0, 1.0, 0.0);
+    let once = incident.reflect(normal);
+    assert_vec3_close(once.reflect(normal), incident);
+}
+
+#[test]
+fn refract_preserves_unit_length_for_transmitted_rays() {
+    let eta = 1.0 / 1.5;
+    let normal = Vec3::new(0.0, 1.0, 0.0);
+    let incident = Vec3::new(0.3, -0.7, 0.1).normalize();
+    let refracted = incident.refract(normal, eta).unwrap();
+    assert_unit(refracted);
+}
+
+#[test]
+fn lerp_extrapolates_beyond_endpoints() {
+    let a = Vec3::new(1.0, 0.0, 0.0);
+    let b = Vec3::new(0.0, 1.0, 0.0);
+    assert_vec3_close(a.lerp(b, 2.0), a * -1.0 + b * 2.0);
+    assert_vec3_close(a.lerp(b, -0.5), a * 1.5 + b * -0.5);
+}
+
+#[test]
+fn partial_eq_requires_exact_component_match() {
+    let a = Vec3::new(1.0, 2.0, 3.0);
+    let b = Vec3::new(1.0, 2.0, 3.0);
+    let c = Vec3::new(1.0 + EPS, 2.0, 3.0);
+    assert_eq!(a, b);
+    assert_ne!(a, c);
 }
