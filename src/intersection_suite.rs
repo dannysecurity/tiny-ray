@@ -254,6 +254,24 @@ fn closest_hit_in_objects_and_any_hit_agree_on_miss_ray() {
 }
 
 #[test]
+fn closest_hit_point_lies_on_ray_at_parameter_t() {
+    let cases = [
+        (
+            scene(vec![Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0))]),
+            ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+        ),
+        (
+            scene(vec![Arc::new(floor_plane())]),
+            ray_from((0.0, 2.0, 0.0), (0.0, -1.0, 0.0)),
+        ),
+    ];
+    for (objects, ray) in cases {
+        let hit = closest_hit_in_objects(&objects, &ray, 0.001, f64::INFINITY).unwrap();
+        assert_vec3_close(hit.point, ray.at(hit.t));
+    }
+}
+
+#[test]
 fn diagonal_plane_bounding_box_encloses_surface_point() {
     let plane = diagonal_plane();
     let bbox = plane.bounding_box();

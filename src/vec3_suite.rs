@@ -217,3 +217,20 @@ fn partial_eq_requires_exact_component_match() {
     assert_eq!(a, b);
     assert_ne!(a, c);
 }
+
+#[test]
+fn cross_is_perpendicular_to_both_operands() {
+    let [a, b, _, _] = property_test_vectors();
+    let c = a.cross(b);
+    assert_orthogonal(c, a);
+    assert_orthogonal(c, b);
+}
+
+#[test]
+fn normalize_aligns_with_original_direction() {
+    for v in property_test_vectors() {
+        let n = v.normalize();
+        assert_close(v.dot(n), v.length());
+        assert_length_close(n, 1.0);
+    }
+}

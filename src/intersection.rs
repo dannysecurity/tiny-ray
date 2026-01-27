@@ -237,4 +237,20 @@ mod tests {
             assert_eq!(blocked, nearest.is_some());
         }
     }
+
+    #[test]
+    fn closest_hit_in_objects_includes_hit_at_exact_t_max() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0))];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        let hit = closest_hit_in_objects(&objects, &ray, 0.001, 4.0).unwrap();
+        assert_close(hit.t, 4.0);
+    }
+
+    #[test]
+    fn any_hit_is_true_at_exact_t_max_when_intersection_exists() {
+        let objects: Vec<Arc<dyn Hittable>> = vec![Arc::new(unit_sphere_at((0.0, 0.0, 0.0), 1.0))];
+        let ray = ray_from((-5.0, 0.0, 0.0), (1.0, 0.0, 0.0));
+        assert!(any_hit_in_objects(&objects, &ray, 0.001, 4.0));
+        assert!(!any_hit_in_objects(&objects, &ray, 0.001, 3.999999));
+    }
 }
