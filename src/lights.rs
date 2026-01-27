@@ -82,13 +82,7 @@ impl EmissiveSphere {
         }
 
         let pdf = distance * distance / (cos_at_light * self.surface_area());
-        Some(LightSample {
-            point: light_point,
-            direction,
-            distance,
-            radiance: self.radiance,
-            pdf,
-        })
+        LightSample::from_endpoints(shading_point, light_point, self.radiance, pdf)
     }
 }
 
@@ -99,6 +93,29 @@ pub struct LightSample {
     pub distance: f64,
     pub radiance: Color,
     pub pdf: f64,
+}
+
+impl LightSample {
+    /// Build a shadow-ray sample from shading and light surface points using geometric distance.
+    fn from_endpoints(
+        shading_point: Point3,
+        light_point: Point3,
+        radiance: Color,
+        pdf: f64,
+    ) -> Option<Self> {
+        let to_light = light_point - shading_point;
+        let distance = to_light.length();
+        if distance <= 1e-8 {
+            return None;
+        }
+        Some(Self {
+            point: light_point,
+            direction: to_light / distance,
+            distance,
+            radiance,
+            pdf,
+        })
+    }
 }
 
 /// Collection of emissive spheres sampled for next-event estimation.
@@ -218,18 +235,15 @@ impl LightList {
             reflect_dir,
             ray_time,
         );
-        let Some((light_point, distance)) = light.intersect(&reflect_ray, 1e-4, f64::INFINITY)
+        let Some((light_point, _t_hit)) = light.intersect(&reflect_ray, 1e-4, f64::INFINITY)
         else {
             return Color::default();
         };
 
-        let direction = (light_point - shading_point) / distance;
-        let sample = LightSample {
-            point: light_point,
-            direction,
-            distance,
-            radiance: light.radiance,
-            pdf: 1.0,
+        let Some(sample) =
+            LightSample::from_endpoints(shading_point, light_point, light.radiance, 1.0)
+        else {
+            return Color::default();
         };
         if !Self::is_visible(world, shading_point, &sample, ray_time) {
             return Color::default();
@@ -412,6 +426,97 @@ mod tests {
             0.0,
         );
         assert!(color.x > 0.0);
+    }
+
+    #[test]
+    fn specular_direct_off_axis_uses_geometric_shadow_ray() {
+        let light = EmissiveSphere {
+            center: Point3::new(4.0, 8.0, 0.0),
+            radius: 2.0,
+            radiance: Color::new(5.0, 5.0, 5.0),
+        };
+        let lights = LightList {
+            lights: vec![light],
+        };
+        let shading_point = Point3::new(2.0, 0.0, 0.0);
+        let shading_normal = Vec3::new(0.0, 1.0, 0.0);
+        let view_direction = Vec3::new(0.3, -0.954, 0.0);
+        let albedo = Color::new(0.8, 0.8, 0.8);
+        let mut rng = StdRng::seed_from_u64(13);
+
+        let color = lights.sample_direct_specular(
+            &mut rng,
+            &Sphere::new(
+                Point3::new(100.0, 100.0, 100.0),
+                1.0,
+                Arc::new(Material::Lambertian {
+                    albedo: Color::default(),
+                }),
+            ),
+            shading_point,
+            shading_normal,
+            view_direction,
+            albedo,
+            0.0,
+            0.0,
+        );
+        assert!(color.x > 0.0, "off-axis mirror reflection should reach emissive light");
+    }
+
+    #[test]
+    fn specular_direct_off_axis_respects_occluder() {
+        let light = EmissiveSphere {
+            center: Point3::new(4.0, 8.0, 0.0),
+            radius: 2.0,
+            radiance: Color::new(5.0, 5.0, 5.0),
+        };
+        let lights = LightList {
+            lights: vec![light],
+        };
+        let shading_point = Point3::new(2.0, 0.0, 0.0);
+        let shading_normal = Vec3::new(0.0, 1.0, 0.0);
+        let view_direction = Vec3::new(0.3, -0.954, 0.0);
+        let albedo = Color::new(0.8, 0.8, 0.8);
+        let mut rng = StdRng::seed_from_u64(13);
+
+        let occluder = Sphere::new(
+            Point3::new(2.944, 3.0, 0.0),
+            1.0,
+            Arc::new(Material::Lambertian {
+                albedo: Color::new(0.5, 0.5, 0.5),
+            }),
+        );
+
+        let color = lights.sample_direct_specular(
+            &mut rng,
+            &occluder,
+            shading_point,
+            shading_normal,
+            view_direction,
+            albedo,
+            0.0,
+            0.0,
+        );
+        assert_eq!(
+            color,
+            Color::default(),
+            "occluder on geometric path to light should block specular direct lighting"
+        );
+    }
+
+    #[test]
+    fn light_sample_from_endpoints_produces_unit_direction() {
+        let shading_point = Point3::new(2.0, 0.0, 0.0);
+        let light_point = Point3::new(3.888, 6.003, 0.0);
+        let sample = LightSample::from_endpoints(
+            shading_point,
+            light_point,
+            Color::new(1.0, 1.0, 1.0),
+            1.0,
+        )
+        .expect("valid endpoints");
+        assert!((sample.direction.length() - 1.0).abs() < 1e-10);
+        assert!((sample.distance - (light_point - shading_point).length()).abs() < 1e-10);
     }
 
     #[test]
