@@ -170,6 +170,33 @@ pub fn load_scene_file_with_format(
     )
 }
 
+/// Parse and validate a single-file scene from memory (no `include` resolution).
+pub fn load_scene_from_str(
+    text: &str,
+    format_override: Option<SceneFormat>,
+) -> Result<SceneFile, Box<dyn std::error::Error>> {
+    if text.trim().is_empty() {
+        return Err("scene text is empty".into());
+    }
+
+    let format = format_override.unwrap_or_else(|| {
+        SceneFormat::sniff(text).unwrap_or(SceneFormat::Ron)
+    });
+    let mut scene = format.parse(text).map_err(|e| -> Box<dyn std::error::Error> {
+        format!("failed to parse scene text as {format}: {e}").into()
+    })?;
+
+    if !scene.include.is_empty() {
+        return Err(
+            "in-memory scene text cannot use include (load from a file path instead)".into(),
+        );
+    }
+
+    validate::normalize(&mut scene);
+    validate::validate(&scene)?;
+    Ok(scene)
+}
+
 pub fn load_scene_file_with_options(
     path: impl AsRef<Path>,
     options: LoadOptions,
@@ -680,5 +707,103 @@ objects:
         assert_eq!(json.render.filter, PixelFilter::Gaussian);
         assert!((json.render.exposure - 1.2).abs() < 1e-9);
         assert_eq!(yaml.sky.horizon, ron.sky.horizon);
+    }
+
+    #[test]
+    fn load_scene_from_str_parses_json_and_yaml() {
+        let json = load_scene_from_str(MINIMAL_JSON, None).unwrap();
+        let yaml = load_scene_from_str(MINIMAL_YAML, None).unwrap();
+        assert_eq!(json.render.width, 64);
+        assert_eq!(yaml.render.width, 64);
+        assert_eq!(json.objects.len(), 1);
+        assert_eq!(yaml.objects.len(), 1);
+    }
+
+    #[test]
+    fn load_scene_from_str_rejects_include_directive() {
+        let json = r#"{
+            "include": ["fragments/foo.json"],
+            "camera": {
+                "lookfrom": [0,0,5], "lookat": [0,0,0], "vup": [0,1,0],
+                "vfov": 45, "aperture": 0, "focus_distance": 5
+            },
+            "render": {
+                "width": 8, "height": 8, "samples_per_pixel": 1,
+                "max_depth": 4, "output": "x.png"
+            },
+            "objects": []
+        }"#;
+        let err = load_scene_from_str(json, Some(SceneFormat::Json))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("include"), "{err}");
+    }
+
+    #[test]
+    fn fragment_only_file_as_root_reports_missing_camera() {
+        let path = std::env::temp_dir().join("tiny_ray_fragment_only.yaml");
+        fs::write(
+            &path,
+            r#"
+objects:
+  - center: [0.0, 0.0, 0.0]
+    radius: 0.5
+    material:
+      Lambertian:
+        albedo: [0.5, 0.5, 0.5]
+"#,
+        )
+        .unwrap();
+        let err = load_scene_file(&path).unwrap_err().to_string();
+        assert!(err.contains("missing a camera block"), "{err}");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn circular_include_is_rejected() {
+        let dir = std::env::temp_dir().join("tiny_ray_circular_include");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let a = dir.join("a.yaml");
+        let b = dir.join("b.yaml");
+        fs::write(
+            &a,
+            r#"
+include: [b.yaml]
+camera:
+  lookfrom: [0.0, 0.0, 5.0]
+  lookat: [0.0, 0.0, 0.0]
+  vup: [0.0, 1.0, 0.0]
+  vfov: 45.0
+  aperture: 0.0
+  focus_distance: 5.0
+render:
+  width: 8
+  height: 8
+  samples_per_pixel: 1
+  max_depth: 4
+  output: loop.png
+objects: []
+"#,
+        )
+        .unwrap();
+        fs::write(
+            &b,
+            r#"
+include: [a.yaml]
+objects:
+  - center: [0.0, 0.0, 0.0]
+    radius: 0.5
+    material:
+      Lambertian:
+        albedo: [1.0, 1.0, 1.0]
+"#,
+        )
+        .unwrap();
+
+        let err = load_scene_file(&a).unwrap_err().to_string();
+        assert!(err.contains("circular scene include"), "{err}");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

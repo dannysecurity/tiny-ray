@@ -12,8 +12,9 @@ pub use crate::sky::SkyDesc;
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct SceneFile {
     /// Paths to fragment scene files, resolved relative to the including file.
-    /// Fragments contribute `objects`, `planes`, and nested `include` entries;
-    /// their `camera` and `render` blocks are ignored.
+    /// Fragments contribute `objects`, `planes`, and nested `include` entries.
+    /// When a root scene omits `camera`, `render`, or `sky`, the loader inherits
+    /// the first value supplied by an included fragment.
     #[serde(default)]
     pub include: Vec<String>,
     pub camera: CameraDesc,

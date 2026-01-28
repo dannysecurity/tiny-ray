@@ -34,7 +34,6 @@ mod world;
 pub use scene::Scene;
 
 use cli::{CliOptions, USAGE};
-use scene::load_scene_file_with_format;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = CliOptions::from_env().map_err(|message| {
@@ -43,16 +42,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         message
     })?;
 
-    let scene = if options.scene_path.exists() {
-        let mut file = load_scene_file_with_format(&options.scene_path, options.format)?;
-        options.apply_to_render(&mut file.render);
-        Scene::from_scene_file(file)
-    } else {
-        eprintln!("Scene file not found; using built-in demo scene");
-        let mut file = Scene::default_demo_file();
-        options.apply_to_render(&mut file.render);
-        Scene::from_scene_file(file)
-    };
+    let (scene, file, source) = options.load_scene()?;
+
+    if options.validate {
+        options.print_validation_summary(&scene, &file, &source);
+        return Ok(());
+    }
 
     if options.bvh_stats {
         match scene.world.bvh_stats() {

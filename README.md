@@ -44,7 +44,14 @@ cargo run --release -- --samples 10 --output preview.png scenes/studio.ron
 | `--aa MODE` | Anti-aliasing: `random` (default), `stratified`, `halton`, or `r2` |
 | `--filter MODE` | Pixel reconstruction filter: `box` (default), `gaussian`, or `mitchell` |
 | `--bvh-stats` | Print BVH node, leaf, and primitive counts after loading the scene |
+| `--validate` | Parse and validate the scene, print a summary, and exit without rendering |
 | `-h`, `--help` | Print usage |
+
+Read a scene from standard input by passing `-` as the scene path (often paired with `--format json` or `--format yaml`):
+
+```bash
+cargo run --release -- --validate --format json - < scenes/demo.json
+```
 
 ## Example render: starter demo
 

@@ -6,7 +6,9 @@ mod validate;
 pub use build::{accelerate_world, BuiltWorld};
 
 pub use format::{CameraDesc, RenderDesc, SceneFile};
-pub use loader::{load_scene_file, load_scene_file_with_format, SceneFormat};
+pub use loader::{
+    load_scene_file, load_scene_file_with_format, load_scene_from_str, SceneFormat,
+};
 
 use std::path::Path;
 use std::sync::Arc;
@@ -35,6 +37,35 @@ impl Scene {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let file = load_scene_file_with_format(path, format)?;
         Ok(Self::from_scene_file(file))
+    }
+
+    pub fn from_str(
+        text: &str,
+        format: Option<SceneFormat>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let file = load_scene_from_str(text, format)?;
+        Ok(Self::from_scene_file(file))
+    }
+
+    /// Print a human-readable summary after a successful load (for `--validate`).
+    pub fn print_validation_summary(&self, source: &str, file: &SceneFile) {
+        eprintln!("Validated {source}");
+        eprintln!(
+            "  Render: {}x{} @ {} spp -> {}",
+            self.render.width,
+            self.render.height,
+            self.render.samples_per_pixel,
+            self.render.output
+        );
+        eprintln!(
+            "  Geometry: {} sphere(s), {} plane(s)",
+            file.objects.len(),
+            file.planes.len()
+        );
+        eprintln!("  Lights: {}", self.lights.len());
+        if let Some(stats) = self.world.bvh_stats() {
+            eprintln!("  {}", stats.format_summary());
+        }
     }
 
     pub fn from_scene_file(file: SceneFile) -> Self {

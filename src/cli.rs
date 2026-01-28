@@ -1,13 +1,14 @@
 //! Command-line argument parsing and scene override application.
 
 use std::env;
+use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::color::{GammaEncoding, InputColorSpace, ToneMapping};
 use crate::dither::DitherMode;
 use crate::film::PixelFilter;
 use crate::sampling::AntiAliasing;
-use crate::scene::{Scene, SceneFormat};
+use crate::scene::{load_scene_file_with_format, load_scene_from_str, Scene, SceneFile, SceneFormat};
 
 pub const USAGE: &str = "\
 Usage: tiny-ray [OPTIONS] [SCENE]
@@ -32,6 +33,7 @@ Options:
       --aa MODE         Override anti-aliasing: random, stratified, halton, or r2
       --filter MODE     Override pixel reconstruction filter: box, gaussian, or mitchell
       --bvh-stats       Print BVH node counts after scene build (bounded geometry only)
+      --validate        Parse and validate the scene, print a summary, and exit without rendering
   -h, --help            Show this help message
 
 Examples:
@@ -39,6 +41,8 @@ Examples:
   cargo run --release -- --samples 10 --output preview.png scenes/studio.json
   cargo run --release -- --width 400 --height 225 --samples 8 scenes/neon.ron
   cargo run --release -- --format yaml scenes/cornell-modular.yaml
+  cargo run --release -- --validate scenes/cornell.json
+  cargo run --release -- --format json --validate -
   cargo run --release -- --gamma srgb --tone-map aces --aa stratified --filter mitchell scenes/studio.ron
 ";
 
@@ -58,6 +62,7 @@ pub struct CliOptions {
     pub aa: Option<AntiAliasing>,
     pub filter: Option<PixelFilter>,
     pub bvh_stats: bool,
+    pub validate: bool,
 }
 
 impl CliOptions {
@@ -85,6 +90,7 @@ impl CliOptions {
         let mut aa = None;
         let mut filter = None;
         let mut bvh_stats = false;
+        let mut validate = false;
 
         while let Some(arg) = args.next() {
             let arg = arg.as_ref();
@@ -161,6 +167,15 @@ impl CliOptions {
                 "--bvh-stats" => {
                     bvh_stats = true;
                 }
+                "--validate" => {
+                    validate = true;
+                }
+                "-" => {
+                    if scene_path.is_some() {
+                        return Err("unexpected extra argument: -".into());
+                    }
+                    scene_path = Some(PathBuf::from("-"));
+                }
                 value if value.starts_with('-') => {
                     return Err(format!("unknown option: {value}"));
                 }
@@ -188,7 +203,43 @@ impl CliOptions {
             aa,
             filter,
             bvh_stats,
+            validate,
         })
+    }
+
+    /// Load a scene from disk, stdin (`-`), or the built-in demo fallback.
+    pub fn load_scene(&self) -> Result<(Scene, SceneFile, String), Box<dyn std::error::Error>> {
+        if self.scene_path.as_os_str() == "-" {
+            let mut text = String::new();
+            io::stdin().read_to_string(&mut text)?;
+            let file = load_scene_from_str(&text, self.format)?;
+            let mut scene = Scene::from_scene_file(file.clone());
+            self.apply_to_scene(&mut scene);
+            return Ok((scene, file, "<stdin>".into()));
+        }
+
+        if self.scene_path.exists() {
+            let file = load_scene_file_with_format(&self.scene_path, self.format)?;
+            let mut scene = Scene::from_scene_file(file.clone());
+            self.apply_to_scene(&mut scene);
+            let source = self.scene_path.display().to_string();
+            return Ok((scene, file, source));
+        }
+
+        eprintln!("Scene file not found; using built-in demo scene");
+        let file = Scene::default_demo_file();
+        let mut scene = Scene::from_scene_file(file.clone());
+        self.apply_to_scene(&mut scene);
+        Ok((scene, file, "built-in demo".into()))
+    }
+
+    pub fn print_validation_summary(
+        &self,
+        scene: &Scene,
+        file: &SceneFile,
+        source: &str,
+    ) {
+        scene.print_validation_summary(source, file);
     }
 
     /// Apply CLI overrides onto render settings before building the scene world.
@@ -330,6 +381,7 @@ mod tests {
         assert_eq!(options.filter, None);
         assert_eq!(options.format, None);
         assert!(!options.bvh_stats);
+        assert!(!options.validate);
     }
 
     #[test]
@@ -477,6 +529,59 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_accepts_validate_flag() {
+        let options = CliOptions::parse_from(["--validate", "scenes/demo.json"]).unwrap();
+        assert!(options.validate);
+    }
+
+    #[test]
+    fn parse_args_accepts_stdin_scene_path() {
+        let options = CliOptions::parse_from(["-", "--format", "json"]).unwrap();
+        assert_eq!(options.scene_path, PathBuf::from("-"));
+        assert_eq!(options.format, Some(SceneFormat::Json));
+    }
+
+    #[test]
+    fn load_scene_reads_json_from_disk() {
+        let options = CliOptions::parse_from(["scenes/demo.json"]).unwrap();
+        let (scene, file, source) = options.load_scene().unwrap();
+        assert_eq!(source, "scenes/demo.json");
+        assert_eq!(file.objects.len(), 6);
+        assert_eq!(scene.lights.len(), 1);
+    }
+
+    #[test]
+    fn load_scene_from_str_builds_runtime_scene() {
+        let json = r#"{
+            "camera": {
+                "lookfrom": [0.0, 0.0, 5.0],
+                "lookat": [0.0, 0.0, 0.0],
+                "vup": [0.0, 1.0, 0.0],
+                "vfov": 45.0,
+                "aperture": 0.0,
+                "focus_distance": 5.0
+            },
+            "render": {
+                "width": 16,
+                "height": 16,
+                "samples_per_pixel": 1,
+                "max_depth": 4,
+                "output": "inline.png"
+            },
+            "objects": [
+                {
+                    "center": [0.0, 0.0, -1.0],
+                    "radius": 0.5,
+                    "material": { "Emissive": { "color": [1.0, 1.0, 1.0], "intensity": 2.0 } }
+                }
+            ]
+        }"#;
+        let scene = Scene::from_str(json, Some(SceneFormat::Json)).unwrap();
+        assert_eq!(scene.render.output, "inline.png");
+        assert_eq!(scene.lights.len(), 1);
+    }
+
+    #[test]
     fn apply_to_scene_updates_render_settings() {
         let mut scene = Scene::default_demo();
         let options = CliOptions {
@@ -494,6 +599,7 @@ mod tests {
             aa: Some(AntiAliasing::Stratified),
             filter: Some(PixelFilter::Gaussian),
             bvh_stats: false,
+            validate: false,
         };
         options.apply_to_scene(&mut scene);
         assert_eq!(scene.render.output, "override.png");
