@@ -285,10 +285,10 @@ fn load_scene_resolved(
         planes: Vec::new(),
     };
 
-    for rel in includes {
+    for (index, rel) in includes.into_iter().enumerate() {
         let rel = rel.trim();
         if rel.is_empty() {
-            return Err(validate::SceneValidationError::EmptyIncludePath { index: 0 }.into());
+            return Err(validate::SceneValidationError::EmptyIncludePath { index }.into());
         }
         let include_path = base.join(rel);
         let fragment = load_scene_resolved(&include_path, options, visited)?;
@@ -757,6 +757,57 @@ objects:
         let err = load_scene_file(&path).unwrap_err().to_string();
         assert!(err.contains("missing a camera block"), "{err}");
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn empty_include_path_reports_correct_index() {
+        let dir = std::env::temp_dir().join("tiny_ray_empty_include_index");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let ok = dir.join("ok.yaml");
+        fs::write(
+            &ok,
+            r#"
+objects:
+  - center: [0.0, 0.0, 0.0]
+    radius: 0.5
+    material:
+      Lambertian:
+        albedo: [0.5, 0.5, 0.5]
+"#,
+        )
+        .unwrap();
+
+        let root = dir.join("root.yaml");
+        fs::write(
+            &root,
+            r#"
+include:
+  - ok.yaml
+  - ""
+  - ok.yaml
+camera:
+  lookfrom: [0.0, 0.0, 5.0]
+  lookat: [0.0, 0.0, 0.0]
+  vup: [0.0, 1.0, 0.0]
+  vfov: 45.0
+  aperture: 0.0
+  focus_distance: 5.0
+render:
+  width: 8
+  height: 8
+  samples_per_pixel: 1
+  max_depth: 4
+  output: bad-include.png
+objects: []
+"#,
+        )
+        .unwrap();
+
+        let err = load_scene_file(&root).unwrap_err().to_string();
+        assert!(err.contains("include[1]"), "{err}");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
